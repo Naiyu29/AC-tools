@@ -3,641 +3,723 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AC道路鋪設高程視覺化圖表 (Canvas版)</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>2D 多里程剖面圖檢視器</title>
     <style>
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            background-color: #f8fafc;
-            color: #1f2937;
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f4f4;
+            color: #333;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
         }
-        .input-group { display: flex; flex-direction: column; }
-        .input-group label { font-size: 0.875rem; font-weight: 500; color: #4b5563; margin-bottom: 0.25rem; }
-        .input-group input, .input-group textarea { padding: 0.5rem 0.75rem; border: 1px solid #d1d5db; border-radius: 0.375rem; width: 100%; }
-        .action-button { background-color: #2563eb; color: white; font-weight: 600; padding: 0.6rem 1rem; border-radius: 0.375rem; border: none; cursor: pointer; transition: background-color 0.2s; }
-        .action-button:hover { background-color: #1d4ed8; }
-        .secondary-button { background-color: #6b7280; color: white; font-size: 0.875rem; font-weight: 500; padding: 0.5rem 1rem; border-radius: 0.375rem; border: none; cursor: pointer; transition: background-color: 0.2s; }
-        .secondary-button:hover { background-color: #4b5563; }
-        .row-action-btn { background-color: #e5e7eb; color: #374151; font-size: 0.75rem; padding: 0.125rem 0.5rem; border-radius: 0.25rem; margin: 0 0.125rem; border: 1px solid #d1d5db; }
-        .row-action-btn:hover { background-color: #d1d5db; }
-        #customPavingCanvas { cursor: grab; }
-        #customPavingCanvas:active { cursor: grabbing; }
-        #dataTableContainer { max-height: 480px; overflow-y: auto; }
-        #dataTable thead { position: sticky; top: 0; background-color: #f9fafb; z-index: 10; }
-        .elevation-input { width: 100%; background-color: #eff6ff; text-align: center; border: 1px solid #dbeafe; border-radius: 4px; padding: 2px; transition: border-color 0.3s; }
-        .thickness-cell.out-of-range { color: #ef4444; font-weight: bold; }
-        .table-avg-hidden .avg-elev-col { display: none; }
-        .table-actions-hidden .actions-col { display: none; }
-        .highlight-diff { border-color: #f59e0b; border-width: 2px; }
-        .instructions-content.hidden { display: none; }
+        #controlsContainer, #infoContainer {
+            background-color: #fff;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            max-width: 800px;
+            width: 90vw;
+        }
+        h2, h3 {
+            color: #333;
+            margin-top: 0;
+        }
+        h4 {
+            margin-top: 10px;
+            margin-bottom: 8px;
+        }
+        textarea {
+            width: calc(100% - 22px);
+            max-width: 780px;
+            height: 150px;
+            margin-bottom: 10px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 0.9em;
+        }
+        button, input[type="number"] {
+            margin-right: 5px;
+            margin-bottom: 5px;
+            padding: 4px 8px;
+            font-size: 0.9em;
+            vertical-align: middle;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 8px 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .control-group {
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
+        }
+        .control-group:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+        label {
+            margin-right: 5px;
+            font-size: 0.9em;
+            vertical-align: middle;
+        }
+        #errorDisplay {
+            color: red;
+            background-color: #ffebee;
+            padding: 10px;
+            border: 1px solid #e57373;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            display: none;
+        }
+        .plot-container {
+             margin-top: 20px;
+             padding-top: 15px;
+             border-top: 2px solid #007bff;
+        }
+        .plot-canvas {
+            border: 1px solid #ccc;
+            background-color: #fdfdfd;
+            width: 100%;
+            height: 400px;
+            cursor: default; /* 移除所有互動後改為預設指標 */
+        }
+        .data-section {
+            margin-bottom: 15px;
+        }
+        #copyLinkMessage {
+            color: green;
+            margin-top: 5px;
+            font-size: 0.85em;
+            display: none;
+        }
     </style>
 </head>
-<body class="p-4">
-    <div class="w-full max-w-7xl mx-auto bg-white p-6 md:p-8 rounded-2xl shadow-xl">
-        <div class="mb-4 text-center">
-            <h1 class="text-2xl md:text-3xl font-bold text-gray-800">AC道路鋪設方案 視覺化分析</h1>
-            <p class="text-gray-500 mt-2">使用原生Canvas繪製，提供更佳的平順度演算法與自訂數據功能。</p>
-        </div>
+<body>
+    <div id="infoContainer">
+        <h2>2D 多里程剖面圖檢視器</h2>
+        <p>此程式會為您數據中的每一個里程，自動產生一個獨立的 2D 剖面圖 (高程 vs 支距)，並將不同施工階段的數據疊加顯示。</p>
+        <ul id="controlsInfo">
+            <li><b>資料格式：</b>在對應的區塊輸入資料。第一行為標頭，後續每行為一組里程資料。第一欄為里程(Y)，之後為數個高程(Z)值，最後為對應數量的支距(X)值。</li>
+            <li><b>圖表互動：</b>將滑鼠移到線上可查看該點的支距和高程座標。圖表本身不可拖曳或縮放。</li>
+            <li><b>比例控制：</b>使用「高程(Z)顯示比例」可同步調整所有圖表的 Z 軸視覺比例。</li>
+        </ul>
+    </div>
 
-        <div id="instructionsContainer" class="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4 transition-all">
-            <button id="toggleInstructionsBtn" class="font-bold text-lg text-blue-700 w-full text-left flex items-center justify-between">
-                <span>使用說明</span>
-                <span id="instruction-arrow">►</span>
-            </button>
-            <div id="instructionsContent" class="mt-4 space-y-3 text-gray-700 text-sm hidden instructions-content">
-                <ul class="list-disc list-inside space-y-2">
-                    <li><b>基本設定:</b> 在上方設定最小、最大及目標平均鋪設厚度。</li>
-                    <li><b>數據與計算:</b>
-                        <ul class="list-['-_'] list-inside ml-4">
-                            <li>於「高程數據」框中貼上新的高程資料 (每行一筆)。</li>
-                            <li>點擊「套用設定並重新計算平順曲線」按鈕，系統會根據您的設定與數據，執行全域平順化計算。</li>
-                        </ul>
-                    </li>
-                    <li><b>圖表互動:</b>
-                        <ul class="list-['-_'] list-inside ml-4">
-                             <li><b>平移:</b> 在圖表上按住滑鼠左鍵並拖曳。</li>
-                             <li><b>縮放:</b> 在圖表上滾動滑鼠滾輪。</li>
-                             <li><b>詳細資訊:</b> 滑鼠指標懸浮於曲線上，即可顯示該點的詳細數據。</li>
-                        </ul>
-                    </li>
-                    <li><b>列表微調與匯出:</b>
-                         <ul class="list-['-_'] list-inside ml-4">
-                             <li><b>手動修改:</b> 直接在列表的「完工高程」欄位輸入數值，圖表與相關數據會即時更新。</li>
-                             <li><b>欄位切換:</b> 點擊列表上方的按鈕，可顯示或隱藏「完工三點平均」及「操作」欄位。</li>
-                             <li><b>數據複製 (CSV):</b> 點擊「複製表格數據」按鈕，即可將完整數據複製到剪貼簿，方便貼至Excel等軟體。</li>
-                             <li><b>分享數據狀態 (URL):</b> 點擊「分享此數據狀態」按鈕，可將當前所有設定與調整後的數據編碼至網址，複製後分享給他人。對方打開網址即可直接看到您調整後的結果。</li>
-                             <li><b>單點操作:</b> 在「操作」欄中，可針對單點執行「均」(套用三點平均)、「小」(設為最小厚度)、「大」(設為最大厚度)。</li>
-                         </ul>
-                    </li>
-                </ul>
+    <div id="controlsContainer">
+        <h3>控制面板</h3>
+        <div id="errorDisplay"></div>
+        <div class="control-group">
+            <h4>資料輸入與繪製</h4>
+            <div class="data-section">
+                <h4>原地面資料</h4>
+                <textarea id="dataInput-original">
+里程	高程					支距				
+	1	2	3	4	5	1	2	3	4	5
+770	3.170	3.115	3.085	3.030	2.985	-4.29	-2.00	0.00	2.00	4.29
+760	3.105	3.125	3.150	3.120	3.095	-4.28	-2.00	0.00	2.00	4.33
+750	3.165	3.170	3.190	3.180	3.135	-4.28	-2.00	0.00	2.00	4.40
+740	3.190	3.230	3.230	3.220	3.130	-4.33	-2.00	0.00	2.00	4.30
+730	3.165	3.245	3.245	3.230	3.175	-4.30	-2.00	0.00	2.00	4.31
+720	3.257	3.292	3.337	3.322	3.292	-4.23	-2.00	0.00	2.00	4.31
+710	3.377	3.407	3.437	3.417	3.382	-4.27	-2.00	0.00	2.00	4.27
+700	3.457	3.512	3.567	3.537	3.492	-4.29	-2.00	0.00	2.00	4.29
+690	3.587	3.637	3.687	3.677	3.627	-4.28	-2.00	0.00	2.00	4.30
+680	3.712	3.742	3.792	3.767	3.712	-4.29	-2.00	0.00	2.00	4.28
+670	3.838	3.843	3.878	3.868	3.848	-4.24	-2.00	0.00	2.00	4.32
+660	3.913	3.918	3.953	3.943	3.908	-4.71	-2.00	0.00	2.00	4.47
+650	3.853	3.923	3.968	4.003	3.998	-4.32	-2.00	0.00	2.00	4.33
+640	3.803	3.883	3.903	3.918	3.868	-4.57	-2.00	0.00	2.00	4.57
+630	3.738	3.863	3.853	3.823	3.813	-4.60	-2.00	0.00	2.00	4.62
+620	3.792	3.807	3.797	3.787	3.722	-4.69	-2.00	0.00	2.00	4.68
+610	3.787	3.787	3.767	3.722	3.657	-4.78	-2.00	0.00	2.00	4.33
+600	3.862	3.857	3.812	3.762	3.662	-4.30	-2.00	0.00	2.00	4.92
+590	3.842	3.887	3.872	3.807	3.692	-4.70	-2.00	0.00	2.00	4.71
+580	3.792	3.827	3.847	3.832	3.797	-4.93	-2.00	0.00	2.00	3.66
+570	3.721	3.766	3.796	3.776	3.761	-4.91	-2.00	0.00	2.00	3.65
+560	3.656	3.701	3.716	3.701	3.681	-4.93	-2.00	0.00	2.00	3.70
+550	3.616	3.641	3.656	3.626	3.586	-4.92	-2.00	0.00	2.00	3.80
+540	3.541	3.606	3.621	3.561	3.511	-4.92	-2.00	0.00	2.00	3.73
+530	3.531	3.551	3.566	3.521	3.451	-4.94	-2.00	0.00	2.00	3.76
+520	3.503	3.513	3.508	3.473	3.383	-4.60	-2.00	0.00	2.00	3.80
+510	3.408	3.478	3.468	3.398	3.328	-4.70	-2.00	0.00	2.00	3.90
+500	3.288	3.393	3.403	3.343	3.248	-4.76	-2.00	0.00	2.00	3.73
+490	3.213	3.263	3.278	3.233	3.163	-4.75	-2.00	0.00	2.00	3.73
+480	3.098	3.148	3.168	3.133	3.078	-4.63	-2.00	0.00	2.00	3.93
+470	3.022	3.087	3.122	3.092	3.052	-4.64	-2.00	0.00	2.00	3.82
+460	3.012	3.057	3.087	3.047	3.012	-4.64	-2.00	0.00	2.00	3.86
+450	3.017	3.047	3.052	3.007	2.957	-4.60	-2.00	0.00	2.00	3.84
+440	2.972	3.002	3.012	2.957	2.897	-4.66	-2.00	0.00	2.00	3.77
+430	2.922	2.957	2.967	2.922	2.877	-4.64	-2.00	0.00	2.00	3.80
+420	2.874	2.889	2.889	2.849	2.804	-4.64	-2.00	0.00	2.00	3.80
+410	2.834	2.844	2.844	2.799	2.759	-4.72	-2.00	0.00	2.00	3.70
+400	2.799	2.814	2.804	2.769	2.729	-4.62	-2.00	0.00	2.00	3.78
+390	2.769	2.774	2.764	2.729	2.689	-4.68	-2.00	0.00	2.00	3.74
+380	2.744	2.764	2.759	2.714	2.674	-4.68	-2.00	0.00	2.00	3.74
+370	2.702	2.737	2.742	2.687	2.637	-4.71	-2.00	0.00	2.00	3.75
+360	2.667	2.682	2.677	2.617	2.567	-5.32	-2.00	0.00	2.00	3.72
+350	2.612	2.612	2.582	2.542	2.497	-6.08	-2.00	0.00	2.00	3.70
+                </textarea>
             </div>
+             <div class="data-section">
+                <h4>刨除後資料</h4>
+                <textarea id="dataInput-milled">
+里程	高程			支距		
+	1	2	3	1	3	3
+770	3.125	3.125	2.985	-4.29	0.00	4.29
+760	3.076	3.119	3.076	-4.28	0.00	4.33
+750	3.089	3.132	3.088	-4.28	0.00	4.40
+740	3.120	3.163	3.120	-4.33	0.00	4.30
+730	3.129	3.215	3.172	-4.30	0.00	4.31
+720	3.205	3.290	3.247	-4.23	0.00	4.31
+710	3.307	3.392	3.349	-4.27	0.00	4.27
+700	3.416	3.502	3.459	-4.29	0.00	4.29
+690	3.528	3.614	3.571	-4.28	0.00	4.30
+680	3.673	3.716	3.695	-4.29	0.00	4.28
+670	3.762	3.804	3.804	-4.24	0.00	4.32
+660	3.816	3.863	3.885	-4.71	0.00	4.47
+650	3.833	3.876	3.919	-4.32	0.00	4.33
+640	3.802	3.848	3.848	-4.57	0.00	4.57
+630	3.738	3.797	3.751	-4.60	0.00	4.62
+620	3.754	3.754	3.660	-4.69	0.00	4.68
+610	3.765	3.741	3.654	-4.78	-2.00	4.33
+600	3.803	3.760	3.662	-4.30	0.00	4.92
+590	3.804	3.780	3.686	-4.70	0.00	4.71
+580	3.768	3.768	3.731	-4.93	0.00	3.66
+570	3.698	3.723	3.687	-4.91	0.00	3.65
+560	3.617	3.666	3.629	-4.93	0.00	3.70
+550	3.560	3.609	3.533	-4.92	0.00	3.80
+540	3.505	3.554	3.479	-4.92	0.00	3.73
+530	3.453	3.502	3.427	-4.94	0.00	3.76
+520	3.404	3.450	3.374	-4.60	0.00	3.80
+510	3.347	3.394	3.316	-4.70	0.00	3.90
+500	3.271	3.319	3.244	-4.76	0.00	3.73
+490	3.179	3.226	3.151	-4.75	0.00	3.73
+480	3.093	3.139	3.060	-4.63	0.00	3.93
+470	3.022	3.073	2.997	-4.64	0.00	3.82
+460	2.983	3.029	2.952	-4.64	0.00	3.86
+450	2.962	2.985	2.947	-4.60	0.00	3.84
+440	2.919	2.942	2.897	-4.66	0.00	3.77
+430	2.870	2.893	2.855	-4.64	0.00	3.80
+420	2.820	2.843	2.804	-4.64	0.00	3.80
+410	2.772	2.796	2.759	-4.72	0.00	3.70
+400	2.731	2.754	2.716	-4.62	0.00	3.78
+390	2.697	2.720	2.683	-4.68	0.00	3.74
+380	2.670	2.693	2.656	-4.68	0.00	3.74
+370	2.633	2.657	2.620	-4.71	0.00	3.75
+360	2.573	2.600	2.563	-5.32	0.00	3.72
+350	2.492	2.522	2.485	-6.08	-2.00	3.70
+                </textarea>
+            </div>
+             <div class="data-section">
+                <h4>舖築後資料</h4>
+                <textarea id="dataInput-paved">
+里程	高程			支距		
+	1	2	3	1	3	3
+770	3.195	3.195	3.109	-4.29	0.00	4.29
+760	3.146	3.189	3.146	-4.28	0.00	4.33
+750	3.159	3.202	3.158	-4.28	0.00	4.40
+740	3.190	3.233	3.190	-4.33	0.00	4.30
+730	3.199	3.285	3.242	-4.30	0.00	4.31
+720	3.275	3.360	3.317	-4.23	0.00	4.31
+710	3.377	3.462	3.419	-4.27	0.00	4.27
+700	3.486	3.572	3.529	-4.29	0.00	4.29
+690	3.598	3.684	3.641	-4.28	0.00	4.30
+680	3.743	3.786	3.765	-4.29	0.00	4.28
+670	3.832	3.874	3.874	-4.24	0.00	4.32
+660	3.886	3.933	3.955	-4.71	0.00	4.47
+650	3.903	3.946	3.989	-4.32	0.00	4.33
+640	3.872	3.918	3.918	-4.57	0.00	4.57
+630	3.844	3.867	3.821	-4.60	0.00	4.62
+620	3.824	3.824	3.730	-4.69	0.00	4.68
+610	3.835	3.811	3.724	-4.78	-2.00	4.33
+600	3.873	3.830	3.732	-4.30	0.00	4.92
+590	3.874	3.850	3.756	-4.70	0.00	4.71
+580	3.838	3.838	3.801	-4.93	0.00	3.66
+570	3.768	3.793	3.757	-4.91	0.00	3.65
+560	3.687	3.736	3.699	-4.93	0.00	3.70
+550	3.630	3.679	3.603	-4.92	0.00	3.80
+540	3.575	3.624	3.549	-4.92	0.00	3.73
+530	3.523	3.572	3.497	-4.94	0.00	3.76
+520	3.474	3.520	3.444	-4.60	0.00	3.80
+510	3.417	3.464	3.386	-4.70	0.00	3.90
+500	3.341	3.389	3.314	-4.76	0.00	3.73
+490	3.249	3.296	3.221	-4.75	0.00	3.73
+480	3.163	3.209	3.130	-4.63	0.00	3.93
+470	3.097	3.143	3.067	-4.64	0.00	3.82
+460	3.053	3.099	3.022	-4.64	0.00	3.86
+450	3.032	3.055	3.017	-4.60	0.00	3.84
+440	2.989	3.012	2.974	-4.66	0.00	3.77
+430	2.940	2.963	2.925	-4.64	0.00	3.80
+420	2.890	2.913	2.875	-4.64	0.00	3.80
+410	2.842	2.866	2.829	-4.72	0.00	3.70
+400	2.801	2.824	2.786	-4.62	0.00	3.78
+390	2.767	2.790	2.753	-4.68	0.00	3.74
+380	2.740	2.763	2.726	-4.68	0.00	3.74
+370	2.703	2.727	2.690	-4.71	0.00	3.75
+360	2.643	2.670	2.633	-5.32	0.00	3.72
+350	2.562	2.592	2.555	-6.08	-2.00	3.70
+                </textarea>
+            </div>
+            <button id="plotButton">繪製圖形</button>
         </div>
-
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6 p-4 border border-gray-200 rounded-lg">
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div class="input-group">
-                    <label for="minThickness">最小厚度 (cm)</label>
-                    <input type="number" id="minThickness" value="5">
-                </div>
-                <div class="input-group">
-                    <label for="maxThickness">最大厚度 (cm)</label>
-                    <input type="number" id="maxThickness" value="10">
-                </div>
-                <div class="input-group">
-                    <label for="avgThickness">目標平均厚度 (cm)</label>
-                    <input type="number" id="avgThickness" value="8">
-                </div>
+        
+        <div class="control-group">
+            <h4>2D 圖形顯示設定</h4>
+            <div>
+                <label for="zScaleInput">高程(Z)顯示比例:</label>
+                <input type="number" id="zScaleInput" value="1.0" min="0.1" step="0.1">
+                 (Z軸相對於X軸的比例)
             </div>
-             <div class="input-group">
-                <label for="dataInput">高程數據 (每行一筆)</label>
-                <textarea id="dataInput" rows="4" class="text-sm"></textarea>
-            </div>
-        </div>
-        <div class="flex justify-center mb-6">
-            <button id="recalculateBtn" class="action-button w-full sm:w-auto">套用設定並重新計算平順曲線</button>
-        </div>
-
-        <div>
-            <div class="relative w-full h-[60vh] mb-8 bg-gray-50 rounded-lg border">
-                <canvas id="customPavingCanvas"></canvas>
-            </div>
-            <div class="flex justify-between items-center mb-2 gap-2">
-                 <button id="copyCSVDataBtn" class="action-button">複製表格數據 (CSV)</button>
-                 <button id="shareDataBtn" class="action-button">分享此數據狀態 (URL)</button>
-                 <div class="flex justify-end gap-2">
-                    <button id="applyAvgBtn" class="secondary-button">套用三點平均 (全體)</button>
-                    <button id="toggleAvgColBtn" class="secondary-button">顯示/隱藏平均高程</button>
-                    <button id="toggleActionsColBtn" class="secondary-button">顯示/隱藏操作欄</button>
-                </div>
-            </div>
-            <div id="dataTableContainer" class="border border-gray-200 rounded-lg">
-                <table id="dataTable" class="w-full text-sm text-left text-gray-500 table-avg-hidden table-actions-hidden">
-                    <thead class="text-xs text-gray-700 uppercase">
-                        <tr>
-                            <th scope="col" class="px-2 py-3">樁號</th>
-                            <th scope="col" class="px-2 py-3">現有高程(m)</th>
-                            <th scope="col" class="px-2 py-3 avg-elev-col">完工三點平均(m)</th>
-                            <th scope="col" class="px-2 py-3">完工高程(m)</th>
-                            <th scope="col" class="px-2 py-3">鋪設厚度(cm)</th>
-                            <th scope="col" class="px-2 py-3 actions-col">操作</th>
-                        </tr>
-                    </thead>
-                    <tbody></tbody>
-                </table>
-            </div>
-            <div class="mt-2 text-center text-sm text-gray-500" id="infoText"></div>
         </div>
     </div>
 
+    <!-- 這個容器將用來動態生成所有圖表 -->
+    <div id="charts-main-container"></div>
+
+
     <script>
-        const initialData = [1.936, 1.904, 1.875, 1.827, 1.747, 1.67, 1.686, 1.706, 1.696, 1.65, 1.595, 1.555, 1.516, 1.431, 1.341, 1.256, 1.145, 1.005, 0.906, 0.802, 0.67, 0.566, 0.461, 0.39, 0.305, 0.24, 0.234, 0.2, 0.171, 0.158, 0.158, 0.175];
-        let stations = [];
-        let existingElevations = [];
-        let proposedElevations = [];
-
-        const minThicknessInput = document.getElementById('minThickness');
-        const maxThicknessInput = document.getElementById('maxThickness');
-        const avgThicknessInput = document.getElementById('avgThickness');
-        const dataInput = document.getElementById('dataInput');
-        const recalculateBtn = document.getElementById('recalculateBtn');
-        const toggleInstructionsBtn = document.getElementById('toggleInstructionsBtn');
-        const instructionsContent = document.getElementById('instructionsContent');
-        const instructionArrow = document.getElementById('instruction-arrow');
-        const toggleAvgColBtn = document.getElementById('toggleAvgColBtn');
-        const toggleActionsColBtn = document.getElementById('toggleActionsColBtn');
-        const applyAvgBtn = document.getElementById('applyAvgBtn');
-        const copyCSVDataBtn = document.getElementById('copyCSVDataBtn'); // Renamed
-        const shareDataBtn = document.getElementById('shareDataBtn'); // New button
-        const infoText = document.getElementById('infoText');
-        const canvas = document.getElementById('customPavingCanvas');
-        const ctx = canvas.getContext('2d');
-        const dataTable = document.getElementById('dataTable');
-        const dataTableBody = dataTable.querySelector("tbody");
-        
-        let view = { scale: 1.0, x: 0, y: 0 };
-        let isPanning = false;
-        let lastMousePos = { x: 0, y: 0 };
-        let lastHoverIndex = -1;
-
-        function calculateSmoothCurve(existing, minThick, maxThick, targetAvg) {
-            const n = existing.length;
-            if (n === 0) return [];
-            const minThickM = minThick / 100;
-            const maxThickM = maxThick / 100;
-            const targetAvgM = targetAvg / 100;
-
-            let smoothed = existing.map(e => e + targetAvgM);
-            
-            for (let iter = 0; iter < 200; iter++) { 
-                let tempSmoothed = [...smoothed];
-                if (n > 2) {
-                    for (let i = 1; i < n - 1; i++) {
-                        tempSmoothed[i] = (smoothed[i - 1] * 0.3 + smoothed[i] * 0.4 + smoothed[i + 1] * 0.3);
-                    }
-                }
-                smoothed = tempSmoothed;
-                for (let i = 0; i < n; i++) {
-                    const lower = existing[i] + minThickM;
-                    const upper = existing[i] + maxThickM;
-                    smoothed[i] = Math.max(lower, Math.min(upper, smoothed[i]));
-                }
-            }
-             let currentAvgThickness = smoothed.reduce((sum, val, i) => sum + (val - existing[i]), 0) / n;
-             let offset = targetAvgM - currentAvgThickness;
-             smoothed = smoothed.map(val => val + offset);
-             for (let i = 0; i < n; i++) {
-                 const lower = existing[i] + minThickM;
-                 const upper = existing[i] + maxThickM;
-                 smoothed[i] = Math.max(lower, Math.min(upper, smoothed[i]));
-             }
-            return smoothed;
-        }
-
-        function getChartMetrics() {
-            const parent = canvas.parentElement;
-            const padding = { top: 40, right: 40, bottom: 50, left: 60 };
-            const chartWidth = parent.clientWidth - padding.left - padding.right;
-            const chartHeight = parent.clientHeight - padding.top - padding.bottom;
-            
-            const allValues = [...existingElevations, ...proposedElevations];
-            const yMin = existingElevations.length > 0 ? Math.min(...allValues) - 0.1 : 0;
-            const yMax = existingElevations.length > 0 ? Math.max(...allValues) + 0.1 : 1;
-            const xMin = stations.length > 0 ? stations[0] : 0;
-            const xMax = stations.length > 0 ? stations[stations.length - 1] : 1;
-
-            const scaleX = chartWidth / (xMax - xMin || 1);
-            const scaleY = chartHeight / (yMax - yMin || 1);
-            
-            return { padding, chartWidth, chartHeight, xMin, yMin, xMax, yMax, scaleX, scaleY };
-        }
-        
-        function drawCustomChart(highlightIndex = -1, mousePos = null) {
-            const minThick = parseFloat(minThicknessInput.value) || 0;
-            const maxThick = parseFloat(maxThicknessInput.value) || 0;
-
-            const parent = canvas.parentElement;
-            canvas.width = parent.clientWidth * window.devicePixelRatio;
-            canvas.height = parent.clientHeight * window.devicePixelRatio;
-            canvas.style.width = `${parent.clientWidth}px`;
-            canvas.style.height = `${parent.clientHeight}px`;
-            ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
-            
-            if (existingElevations.length < 2) {
-                ctx.clearRect(0, 0, parent.clientWidth, parent.clientHeight);
-                ctx.fillText("數據不足，無法繪製圖表。", 20, 40);
-                return;
-            }
-            
-            const metrics = getChartMetrics();
-            const { padding, xMin, yMin, scaleX, scaleY } = metrics;
-            
-            const toCanvasX = (val) => padding.left + (val - xMin) * scaleX;
-            const toCanvasY = (val) => padding.top + metrics.chartHeight - (val - yMin) * scaleY;
-            
-            ctx.clearRect(0, 0, parent.clientWidth, parent.clientHeight);
-            ctx.save();
-            ctx.translate(view.x, view.y);
-            ctx.scale(view.scale, view.scale);
-
-            ctx.font = '12px ' + getComputedStyle(document.body).fontFamily;
-            ctx.lineWidth = 1 / view.scale;
-            const yTicks = 5;
-            for (let i = 0; i <= yTicks; i++) {
-                const val = metrics.yMin + (metrics.yMax - metrics.yMin) * i / yTicks;
-                const y = toCanvasY(val);
-                ctx.beginPath();
-                ctx.moveTo(toCanvasX(metrics.xMin), y);
-                ctx.lineTo(toCanvasX(metrics.xMax), y);
-                ctx.strokeStyle = '#e5e7eb';
-                ctx.stroke();
-            }
-            const xTicks = Math.min(10, stations.length > 1 ? stations.length-1 : 1);
-            for (let i = 0; i <= xTicks; i++) {
-                const stationIndex = Math.floor((stations.length - 1) * i / xTicks);
-                const val = stations[stationIndex];
-                const x = toCanvasX(val);
-                ctx.beginPath();
-                ctx.moveTo(x, toCanvasY(metrics.yMin));
-                ctx.lineTo(x, toCanvasY(metrics.yMax));
-                ctx.strokeStyle = '#e5e7eb';
-                ctx.stroke();
-            }
-            
-            const lowerBound = existingElevations.map(e => e + minThick / 100);
-            const upperBound = existingElevations.map(e => e + maxThick / 100);
-            
-            ctx.beginPath();
-            ctx.moveTo(toCanvasX(stations[0]), toCanvasY(upperBound[0]));
-            for (let i = 1; i < stations.length; i++) ctx.lineTo(toCanvasX(stations[i]), toCanvasY(upperBound[i]));
-            for (let i = stations.length - 1; i >= 0; i--) ctx.lineTo(toCanvasX(stations[i]), toCanvasY(lowerBound[i]));
-            ctx.closePath();
-            ctx.fillStyle = 'rgba(156, 163, 175, 0.2)';
-            ctx.fill();
-
-            const drawLine = (data, color, width, dashed = false) => {
-                 if(data.length < 2) return;
-                 ctx.beginPath();
-                 ctx.moveTo(toCanvasX(stations[0]), toCanvasY(data[0]));
-                 for (let i = 1; i < data.length; i++) ctx.lineTo(toCanvasX(stations[i]), toCanvasY(data[i]));
-                 ctx.strokeStyle = color;
-                 ctx.lineWidth = width / view.scale;
-                 if (dashed) ctx.setLineDash([5 / view.scale, 5 / view.scale]);
-                 ctx.stroke();
-                 ctx.setLineDash([]);
-            };
-            
-            drawLine(existingElevations, 'rgb(59, 130, 246)', 2, true);
-            drawLine(proposedElevations, 'rgb(249, 115, 22)', 3);
-            
-            ctx.restore();
-
-            ctx.fillStyle = '#6b7281';
-            ctx.font = '12px ' + getComputedStyle(document.body).fontFamily;
-            for (let i = 0; i <= yTicks; i++) {
-                const val = metrics.yMin + (metrics.yMax - metrics.yMin) * i / yTicks;
-                const y = toCanvasY(val) * view.scale + view.y;
-                ctx.textAlign = 'right';
-                ctx.textBaseline = 'middle';
-                ctx.fillText(val.toFixed(2), padding.left - 10, y);
-            }
-            for (let i = 0; i <= xTicks; i++) {
-                 const stationIndex = Math.floor((stations.length - 1) * i / xTicks);
-                 const val = stations[stationIndex];
-                 const x = toCanvasX(val) * view.scale + view.x;
-                 ctx.textAlign = 'center';
-                 ctx.textBaseline = 'top';
-                 ctx.fillText(val, x, padding.top + metrics.chartHeight + 10);
-            }
-            
-            if(highlightIndex !== -1 && mousePos && proposedElevations[highlightIndex] !== undefined && existingElevations[highlightIndex] !== undefined){
-                 const x = toCanvasX(stations[highlightIndex]) * view.scale + view.x;
-                 ctx.beginPath();
-                 ctx.moveTo(x, padding.top);
-                 ctx.lineTo(x, padding.top + metrics.chartHeight);
-                 ctx.strokeStyle = '#ef4444';
-                 ctx.lineWidth = 1;
-                 ctx.stroke();
-                 
-                 const thickness = (proposedElevations[highlightIndex] - existingElevations[highlightIndex]) * 100;
-                 const textLines = [
-                     `樁號: ${stations[highlightIndex]}m`,
-                     `現有高程: ${existingElevations[highlightIndex].toFixed(3)}m`,
-                     `完工高程: ${proposedElevations[highlightIndex].toFixed(3)}m`,
-                     `鋪設厚度: ${thickness.toFixed(1)}cm`,
-                 ];
-                 
-                 ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
-                 const boxWidth = 180;
-                 const boxHeight = textLines.length * 18 + 10;
-                 const boxX = (mousePos.x + 15 + boxWidth > parent.clientWidth) ? mousePos.x - 15 - boxWidth : mousePos.x + 15;
-                 const boxY = mousePos.y + 15;
-                 ctx.fillRect(boxX, boxY, boxWidth, boxHeight);
-                 
-                 ctx.fillStyle = 'white';
-                 ctx.font = '12px ' + getComputedStyle(document.body).fontFamily;
-                 ctx.textAlign = 'left';
-                 textLines.forEach((line, i) => {
-                     ctx.fillText(line, boxX + 10, boxY + 18 + i*18);
-                 });
-            }
-        }
-        
-        function renderDataTable() {
-            let tableHTML = '';
-            const minThick = parseFloat(minThicknessInput.value);
-            const maxThick = parseFloat(maxThicknessInput.value);
-
-            for (let i = 0; i < stations.length; i++) {
-                const thickness = (proposedElevations[i] - existingElevations[i]) * 100;
-                const isOutOfRange = thickness < minThick || thickness > maxThick;
-                const thicknessClass = isOutOfRange ? 'out-of-range' : '';
-                
-                let avgElev = NaN;
-                if (i > 0 && i < stations.length - 1) {
-                    avgElev = (proposedElevations[i-1] + proposedElevations[i] + proposedElevations[i+1]) / 3;
-                }
-                
-                let highlightClass = '';
-                if (!isNaN(avgElev) && Math.abs(avgElev - proposedElevations[i]) > 0.015) {
-                    highlightClass = 'highlight-diff';
-                }
-
-                tableHTML += `
-                    <tr class="bg-white border-b hover:bg-gray-50">
-                        <td class="px-2 py-2 font-medium text-gray-900">${stations[i]}m</td>
-                        <td class="px-2 py-2">${existingElevations[i].toFixed(3)}</td>
-                        <td class="px-2 py-2 avg-elev-col text-gray-500">${isNaN(avgElev) ? 'N/A' : avgElev.toFixed(3)}</td>
-                        <td class="px-2 py-2">
-                            <input type="number" step="0.001" value="${proposedElevations[i].toFixed(3)}" class="elevation-input ${highlightClass}" data-index="${i}">
-                        </td>
-                        <td class="px-2 py-2 font-semibold thickness-cell ${thicknessClass}">${thickness.toFixed(1)}</td>
-                        <td class="px-2 py-2 text-center actions-col">
-                            <button class="row-action-btn" data-action="apply-avg" data-index="${i}" title="套用三點平均">均</button>
-                            <button class="row-action-btn" data-action="set-min" data-index="${i}" title="設為最小厚度">小</button>
-                            <button class="row-action-btn" data-action="set-max" data-index="${i}" title="設為最大厚度">大</button>
-                        </td>
-                    </tr>
-                `;
-            }
-            dataTableBody.innerHTML = tableHTML;
-        }
-
-        function updateApp() {
-            const minThick = parseFloat(minThicknessInput.value);
-            const maxThick = parseFloat(maxThicknessInput.value);
-            const avgThick = parseFloat(avgThicknessInput.value);
-
-            const newDataRaw = dataInput.value.trim();
-            if(newDataRaw){
-                 existingElevations = newDataRaw.split(/[\n, ]+/).map(Number).filter(n => !isNaN(n));
-                 stations = existingElevations.map((_, i) => i * 10);
-            }
-
-            if (isNaN(minThick) || isNaN(maxThick) || isNaN(avgThick) || minThick >= maxThick) {
-                infoText.innerHTML = '<p class="text-red-500">請輸入有效的數值，且最小厚度需小於最大厚度。</p>';
-                return;
-            }
-
-            proposedElevations = calculateSmoothCurve(existingElevations, minThick, maxThick, avgThick);
-            drawCustomChart();
-            renderDataTable();
-
-            if(proposedElevations.length > 0){
-                const finalAvgThickness = proposedElevations.reduce((sum, val, i) => sum + (val - existingElevations[i]), 0) / proposedElevations.length * 100;
-                infoText.innerHTML = `<p class="text-green-600 font-semibold">計算完成。全域平順化後，平均厚度約為: <strong>${finalAvgThickness.toFixed(2)} 公分</strong>。</p>`;
-            } else {
-                 infoText.innerHTML = '<p class="text-gray-500">請輸入數據以開始計算。</p>';
-            }
-        }
-        
-        function manualUpdate() {
-            renderDataTable();
-            drawCustomChart();
-            if(proposedElevations.length > 0){
-                const finalAvgThickness = proposedElevations.reduce((sum, val, i) => sum + (val - existingElevations[i]), 0) / proposedElevations.length * 100;
-                infoText.innerHTML = `<p class="text-blue-600 font-semibold">手動調整中... 目前平均厚度約為: <strong>${finalAvgThickness.toFixed(2)} 公分</strong>。</p>`;
-            }
-        }
-
-        function generateShareableUrl() {
-            const state = {
-                minThickness: parseFloat(minThicknessInput.value),
-                maxThickness: parseFloat(maxThicknessInput.value),
-                avgThickness: parseFloat(avgThicknessInput.value),
-                existingElevations: existingElevations,
-                proposedElevations: proposedElevations
-            };
-            const jsonString = JSON.stringify(state);
-            const encodedString = btoa(jsonString); // Base64 encode
-            const shareUrl = window.location.origin + window.location.pathname + "#data=" + encodedString;
-
-            const textarea = document.createElement('textarea');
-            textarea.value = shareUrl;
-            textarea.style.position = 'fixed';
-            textarea.style.left = '-9999px';
-            document.body.appendChild(textarea);
-            textarea.select();
-            try {
-                document.execCommand('copy');
-                const originalText = shareDataBtn.textContent;
-                shareDataBtn.textContent = '網址已複製!';
-                shareDataBtn.disabled = true;
-                setTimeout(() => {
-                    shareDataBtn.textContent = originalText;
-                    shareDataBtn.disabled = false;
-                }, 2000);
-            } catch (err) {
-                console.error('Failed to copy URL to clipboard:', err);
-                prompt("請手動複製網址:", shareUrl);
-            } finally {
-                document.body.removeChild(textarea);
-            }
-        }
-
-        function loadDataFromUrl() {
-            const hash = window.location.hash.substring(1); // Remove '#'
-            if (!hash.startsWith('data=')) {
-                return false;
-            }
-            try {
-                const encodedData = hash.substring(5); // Remove 'data='
-                const decodedJson = atob(encodedData);
-                const loadedState = JSON.parse(decodedJson);
-
-                minThicknessInput.value = loadedState.minThickness;
-                maxThicknessInput.value = loadedState.maxThickness;
-                avgThicknessInput.value = loadedState.avgThickness;
-                dataInput.value = loadedState.existingElevations.join('\n');
-
-                existingElevations = loadedState.existingElevations;
-                proposedElevations = loadedState.proposedElevations;
-                stations = existingElevations.map((_, i) => i * 10);
-
-                return true;
-            } catch (e) {
-                console.error("Error loading data from URL:", e);
-                return false;
-            }
-        }
-
-
-        recalculateBtn.addEventListener('click', updateApp);
-        shareDataBtn.addEventListener('click', generateShareableUrl); // Event listener for new share button
-
-        toggleInstructionsBtn.addEventListener('click', () => {
-            const isHidden = instructionsContent.classList.toggle('hidden');
-            instructionArrow.textContent = isHidden ? '►' : '▼';
-        });
-
-        toggleAvgColBtn.addEventListener('click', () => {
-            dataTable.classList.toggle('table-avg-hidden');
-        });
-        
-        toggleActionsColBtn.addEventListener('click', () => {
-            dataTable.classList.toggle('table-actions-hidden');
-        });
-
-        applyAvgBtn.addEventListener('click', () => {
-            if (proposedElevations.length < 3) return;
-            const tempElevations = [...proposedElevations];
-            for (let i = 1; i < tempElevations.length - 1; i++) {
-                proposedElevations[i] = (tempElevations[i-1] + tempElevations[i] + tempElevations[i+1]) / 3;
-            }
-            manualUpdate();
-            infoText.innerHTML = `<p class="text-blue-600 font-semibold">已套用三點平均進行平順化。</p>`;
-        });
-        
-        copyCSVDataBtn.addEventListener('click', () => { // Renamed listener
-            let csvContent = "樁號,現有高程(m),完工高程(m),鋪設厚度(cm)\n";
-            for (let i = 0; i < stations.length; i++) {
-                const thickness = (proposedElevations[i] - existingElevations[i]) * 100;
-                csvContent += `${stations[i]},${existingElevations[i].toFixed(3)},${proposedElevations[i].toFixed(3)},${thickness.toFixed(1)}\n`;
-            }
-            
-            const textarea = document.createElement('textarea');
-            textarea.value = csvContent;
-            document.body.appendChild(textarea);
-            textarea.select();
-            document.execCommand('copy');
-            document.body.removeChild(textarea);
-
-            const originalText = copyCSVDataBtn.textContent;
-            copyCSVDataBtn.textContent = '已複製!';
-            copyCSVDataBtn.disabled = true;
-            setTimeout(() => {
-                copyCSVDataBtn.textContent = originalText;
-                copyCSVDataBtn.disabled = false;
-            }, 2000);
-        });
-
-        dataTableBody.addEventListener('input', (e) => {
-            if (e.target.classList.contains('elevation-input')) {
-                const index = parseInt(e.target.dataset.index);
-                const newElevation = parseFloat(e.target.value);
-                if (!isNaN(newElevation)) {
-                    proposedElevations[index] = newElevation;
-                    manualUpdate();
-                }
-            }
-        });
-
-        dataTableBody.addEventListener('click', (e) => {
-            const target = e.target.closest('.row-action-btn');
-            if (!target) return;
-            
-            const action = target.dataset.action;
-            const index = parseInt(target.dataset.index);
-            
-            if (isNaN(index)) return;
-
-            if (action === 'apply-avg') {
-                if (index > 0 && index < proposedElevations.length - 1) {
-                    const avg = (proposedElevations[index-1] + proposedElevations[index] + proposedElevations[index+1]) / 3;
-                    proposedElevations[index] = avg;
-                }
-            } else if (action === 'set-min') {
-                const minThick = parseFloat(minThicknessInput.value) / 100;
-                if(!isNaN(minThick)) proposedElevations[index] = existingElevations[index] + minThick;
-            } else if (action === 'set-max') {
-                const maxThick = parseFloat(maxThicknessInput.value) / 100;
-                if(!isNaN(maxThick)) proposedElevations[index] = existingElevations[index] + maxThick;
-            }
-            manualUpdate();
-        });
-        
-        canvas.addEventListener('mousedown', e => {
-            isPanning = true;
-            lastMousePos = { x: e.clientX, y: e.clientY };
-        });
-
-        canvas.addEventListener('mousemove', e => {
-            const mouse = { x: e.offsetX, y: e.offsetY };
-            if (isPanning) {
-                const dx = e.clientX - lastMousePos.x;
-                const dy = e.clientY - lastMousePos.y;
-                view.x += dx;
-                view.y += dy;
-                lastMousePos = { x: e.clientX, y: e.clientY };
-                drawCustomChart(lastHoverIndex, mouse);
-            } else {
-                 const metrics = getChartMetrics();
-                 if(!metrics) return;
-                 const worldX = ((mouse.x/window.devicePixelRatio - view.x) - metrics.padding.left) / metrics.scaleX / view.scale + metrics.xMin;
-                 let closestIndex = -1;
-                 let minDistance = Infinity;
-
-                 for (let i = 0; i < stations.length; i++) {
-                     const distance = Math.abs(worldX - stations[i]);
-                     if (distance < minDistance) {
-                         minDistance = distance;
-                         closestIndex = i;
-                     }
-                 }
-                
-                 if (closestIndex !== lastHoverIndex) {
-                    lastHoverIndex = closestIndex;
-                    if( (minDistance * metrics.scaleX * view.scale) > 20){
-                        lastHoverIndex = -1;
-                    }
-                    drawCustomChart(lastHoverIndex, mouse);
-                 }
-            }
-        });
-
-        window.addEventListener('mouseup', () => { isPanning = false; });
-        canvas.addEventListener('mouseleave', () => {
-             if(lastHoverIndex !== -1){
-                lastHoverIndex = -1;
-                drawCustomChart();
-             }
-        });
-
-        canvas.addEventListener('wheel', e => {
-            e.preventDefault();
-            const scaleAmount = 1.1;
-            const mouse = { x: e.offsetX, y: e.offsetY };
-            const zoomDirection = e.deltaY > 0 ? 1 / scaleAmount : scaleAmount;
-            
-            view.x = mouse.x - (mouse.x - view.x) * zoomDirection;
-            view.y = mouse.y - (mouse.y - view.y) * zoomDirection;
-            view.scale *= zoomDirection;
-            
-            drawCustomChart();
-        });
-        
-        window.onload = () => {
-            if (loadDataFromUrl()) {
-                manualUpdate(); // Just refresh UI with loaded data
-            } else {
-                // If no data in URL, use initialData
-                dataInput.value = initialData.join('\n');
-                existingElevations = [...initialData];
-                stations = existingElevations.map((_, i) => i * 10);
-                updateApp(); // Initial calculation and UI setup
-            }
+        // 全域變數
+        let seriesData = {}; // 以 Y 里程分組
+        let canvasStates = {}; // 儲存每個 canvas 的獨立狀態
+        const PLOT_COLORS = {
+            original: 'blue',
+            milled: 'orange',
+            paved: 'green'
         };
 
-        window.onresize = updateApp;
+        function init() {
+            // DOM 元素
+            const plotButton = document.getElementById('plotButton');
+            const zScaleInput = document.getElementById('zScaleInput');
+
+            // 事件監聽器
+            plotButton.addEventListener('click', updatePlot);
+            zScaleInput.addEventListener('input', () => {
+                // 只重繪，不重置視圖
+                Object.keys(seriesData).forEach(yVal => {
+                    drawSingle2dPlot(yVal, false);
+                });
+            });
+
+            updatePlot();
+        }
+
+        // setupCanvasEvents 函式現在只處理滑鼠移動和離開事件，不再處理拖曳和滾輪縮放
+        function setupCanvasEvents(canvas, yValue, updateFn) {
+            // 只處理滑鼠移動和離開，不觸發平移或縮放
+            canvas.onmousemove = (e) => {
+                const rect = canvas.getBoundingClientRect();
+                const mouseX = e.clientX - rect.left;
+                const mouseY = e.clientY - rect.top;
+                
+                let closestPointOnLine = null;
+                let minDistanceToLine = Infinity;
+
+                const padding = { top: 40, right: 20, bottom: 40, left: 60 };
+                const plotWidth = canvas.width - padding.left - padding.right;
+                const plotHeight = canvas.height - padding.top - padding.bottom;
+
+                // 確保 state 的視圖範圍數據已準備好
+                const state = canvasStates[yValue];
+                if (!state || !state.minX || !state.maxX || !state.minZ || !state.maxZ) {
+                    // 如果狀態尚未完全初始化，則無法計算，直接返回
+                    state.hoveredPoint = null; // 清除可能殘留的提示
+                    updateFn(); // 強制重繪以清除
+                    return; 
+                }
+
+                const mapX = (x) => padding.left + ((x - state.minX) / (state.maxX - state.minX)) * plotWidth;
+                const mapZ = (z) => padding.top + plotHeight - ((z - state.minZ) / (state.maxZ - state.minZ)) * plotHeight;
+                
+                const datasets = seriesData[yValue]; // 直接使用傳入的 yValue 獲取數據
+                if (!datasets) {
+                    state.hoveredPoint = null;
+                    updateFn();
+                    return;
+                }
+
+                // 遍歷所有數據集（原地面、刨除後、舖築後）
+                Object.values(datasets).forEach(dataSet => {
+                    const sortedData = [...dataSet].sort((a,b) => a.tableX - b.tableX);
+                    for (let i = 0; i < sortedData.length - 1; i++) {
+                        const p1 = sortedData[i];
+                        const p2 = sortedData[i+1];
+
+                        const p1ScreenX = mapX(p1.tableX);
+                        const p1ScreenY = mapZ(p1.tableZ);
+                        const p2ScreenX = mapX(p2.tableX);
+                        const p2ScreenY = mapZ(p2.tableZ);
+
+                        const dx_seg = p2ScreenX - p1ScreenX;
+                        const dy_seg = p2ScreenY - p1ScreenY;
+                        const len_sq = dx_seg * dx_seg + dy_seg * dy_seg;
+                        let t = 0;
+                        if (len_sq !== 0) { 
+                            t = ((mouseX - p1ScreenX) * dx_seg + (mouseY - p1ScreenY) * dy_seg) / len_sq;
+                            t = Math.max(0, Math.min(1, t)); 
+                        }
+                        
+                        const closestXOnLine = p1ScreenX + t * dx_seg;
+                        const closestYOnLine = p1ScreenY + t * dy_seg;
+
+                        const dist = Math.sqrt((mouseX - closestXOnLine)**2 + (mouseY - closestYOnLine)**2);
+                        const thresholdPixels = 8; 
+
+                        if (dist < minDistanceToLine && dist < thresholdPixels) {
+                            minDistanceToLine = dist;
+                            
+                            closestPointOnLine = { 
+                                tableX: p1.tableX + t * (p2.tableX - p1.tableX),
+                                tableY: p1.tableY, 
+                                tableZ: p1.tableZ + t * (p2.tableZ - p1.tableZ)
+                            };
+                        }
+                    }
+                });
+
+                state.hoveredPoint = closestPointOnLine;
+                updateFn(); 
+            };
+
+            canvas.onmouseleave = () => {
+                const state = canvasStates[yValue]; // 確保獲取正確的狀態物件
+                if (state) {
+                    state.hoveredPoint = null; 
+                    updateFn(); 
+                }
+            };
+
+            // 徹底移除所有拖曳和滾輪縮放的事件監聽器
+            canvas.onmousedown = null;
+            canvas.onmouseup = null;
+            canvas.onwheel = null;
+        }
+        
+        function parseTableData(textData) {
+            const errorDisplay = document.getElementById('errorDisplay');
+            errorDisplay.style.display = 'none'; 
+            const lines = textData.trim().split('\n').slice(2); 
+            if (lines.length === 0) {
+                return {};
+            }
+            
+            const pointsByY = {}; 
+
+            for (const line of lines) {
+                const parts = line.trim().split(/\s+/).filter(s => s.length > 0);
+                if (parts.length < 3 || (parts.length - 1) % 2 !== 0) {
+                     showError(`資料格式錯誤：行 "${line.substring(0, 30)}..." 的欄位數量不正確。`);
+                     continue; 
+                }
+
+                const yValue = parseFloat(parts[0]); 
+                if (isNaN(yValue)) {
+                    showError(`資料格式錯誤：里程值 "${parts[0]}" 非數值。`);
+                    continue;
+                }
+                
+                const numPoints = (parts.length - 1) / 2;
+                const zValues = parts.slice(1, 1 + numPoints).map(Number);
+                const xValues = parts.slice(1 + numPoints).map(Number);
+                
+                if (zValues.some(isNaN) || xValues.some(isNaN)) {
+                     showError(`資料格式錯誤：行 "${line.substring(0, 30)}..." 包含非數值的高程或支距。`);
+                     continue;
+                }
+                
+                if (!pointsByY[yValue]) {
+                    pointsByY[yValue] = [];
+                }
+
+                for (let i = 0; i < numPoints; i++) {
+                    pointsByY[yValue].push({ tableX: xValues[i], tableY: yValue, tableZ: zValues[i] });
+                }
+            }
+            
+            return pointsByY;
+        }
+
+        function showError(message) {
+            const errorDisplay = document.getElementById('errorDisplay');
+            errorDisplay.textContent = message;
+            errorDisplay.style.display = 'block';
+            console.error(message); 
+        }
+
+        function updatePlot() {
+            const originalData = parseTableData(document.getElementById('dataInput-original').value);
+            const milledData = parseTableData(document.getElementById('dataInput-milled').value);
+            const pavedData = parseTableData(document.getElementById('dataInput-paved').value);
+            
+            // 確保所有數據都已成功解析，即使某個區塊沒有數據，返回的也是空物件 {}
+            if (!originalData || !milledData || !pavedData) {
+                showError("資料解析失敗，請檢查輸入格式。");
+                return;
+            }
+
+            const allYValues = new Set([
+                ...Object.keys(originalData), 
+                ...Object.keys(milledData), 
+                ...Object.keys(pavedData)
+            ]);
+
+            seriesData = {};
+            allYValues.forEach(yVal => {
+                seriesData[yVal] = {
+                    original: originalData[yVal] || [],
+                    milled: milledData[yVal] || [],
+                    paved: pavedData[yVal] || []
+                };
+            });
+            
+            canvasStates = {}; // 重置所有 canvas 的視圖狀態
+
+            const mainContainer = document.getElementById('charts-main-container');
+            mainContainer.innerHTML = ''; // 清空舊的圖表
+
+            const sortedYValues = [...allYValues].map(Number).sort((a,b) => a - b);
+
+            for (const yVal of sortedYValues) {
+                const plotContainer = document.createElement('div');
+                plotContainer.className = 'plot-container';
+                
+                const title = document.createElement('h4');
+                title.textContent = `里程 ${yVal} 的 2D 剖面圖 (高程 vs 支距)`;
+                
+                const canvas = document.createElement('canvas');
+                canvas.id = `canvas-for-${yVal}`;
+                canvas.className = 'plot-canvas';
+
+                plotContainer.appendChild(title);
+                plotContainer.appendChild(canvas);
+                mainContainer.appendChild(plotContainer);
+
+                drawSingle2dPlot(yVal, true); // 繪製並重置該圖表的初始視圖
+            }
+        }
+        
+        function drawSingle2dPlot(yValue, resetView = false) {
+            const canvas = document.getElementById(`canvas-for-${yValue}`);
+            if (!canvas) return;
+            
+            const zScaleFactor = parseFloat(document.getElementById('zScaleInput').value) || 1.0;
+            const dataSets = seriesData[yValue];
+            if (!dataSets) return;
+            
+            // 確保 canvas 狀態物件存在
+            if (!canvasStates[yValue]) {
+                canvasStates[yValue] = {
+                    minX: 0, maxX: 0, minZ: 0, maxZ: 0, // 初始值，將在 resetView 中計算
+                    hoveredPoint: null
+                };
+                 setupCanvasEvents(canvas, yValue, () => drawSingle2dPlot(yValue, false)); // 傳入 yValue
+            }
+            
+            // 如果需要重置視圖，根據所有數據層計算總範圍
+            if (resetView) {
+                let dataMinX = Infinity, dataMaxX = -Infinity, dataMinZ = Infinity, dataMaxZ = -Infinity;
+                
+                Object.values(dataSets).forEach(dataSet => {
+                    dataSet.forEach(p => {
+                        if (p.tableX < dataMinX) dataMinX = p.tableX;
+                        if (p.tableX > dataMaxX) dataMaxX = p.tableX;
+                        if (p.tableZ < dataMinZ) dataMinZ = p.tableZ;
+                        if (p.tableZ > dataMaxZ) dataMaxZ = p.tableZ;
+                    });
+                });
+                
+                const xRange = (dataMaxX - dataMinX) || 10;
+                const zRange = (dataMaxZ - dataMinZ) || 10;
+                const xCenter = (dataMaxX + dataMinX) / 2;
+                const zCenter = (dataMaxZ + dataMinZ) / 2;
+                const xPadding = xRange * 0.1; // 10% 邊距
+                const zPadding = zRange * 0.1; // 10% 邊距
+
+                canvasStates[yValue].minX = xCenter - (xRange / 2) - xPadding;
+                canvasStates[yValue].maxX = xCenter + (xRange / 2) + xPadding;
+                canvasStates[yValue].minZ = zCenter - (zRange / 2) - zPadding;
+                canvasStates[yValue].maxZ = zCenter + (zRange / 2) + zPadding;
+
+                // 在這裡應用 Z 軸顯示比例的邏輯，僅在 resetView 時執行
+                // 這樣可以保證比例正確，並在縮放 X 軸時同步調整 Z 軸的視覺範圍。
+                const plotContentWidth = canvas.width - (60 + 20); // 畫布實際繪圖區域寬度 (考慮左右 padding)
+                const plotContentHeight = canvas.height - (40 + 40); // 畫布實際繪圖區域高度 (考慮上下 padding)
+                
+                const currentViewXRange = canvasStates[yValue].maxX - canvasStates[yValue].minX;
+                const desiredAspectRatio = plotContentWidth / plotContentHeight; // 畫布繪圖區域的像素高寬比
+
+                const desiredZRangeFor1to1 = currentViewXRange / desiredAspectRatio; // 如果 Z 軸和 X 軸單位長度相同，Z 軸數據範圍應為此值
+                const finalDesiredZRange = desiredZRangeFor1to1 / zScaleFactor; // 根據 zScaleFactor 調整最終的 Z 軸數據範圍
+
+                const initialZCenter = (canvasStates[yValue].minZ + canvasStates[yValue].maxZ) / 2; // 使用計算前的 Z 軸中心
+                canvasStates[yValue].minZ = initialZCenter - finalDesiredZRange / 2;
+                canvasStates[yValue].maxZ = initialZCenter + finalDesiredZRange / 2;
+            }
+
+            const state = canvasStates[yValue];
+            const ctx = canvas.getContext('2d');
+            canvas.width = canvas.clientWidth;
+            canvas.height = canvas.clientHeight;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            const padding = { top: 40, right: 20, bottom: 40, left: 60 };
+            const plotWidth = canvas.width - padding.left - padding.right;
+            const plotHeight = canvas.height - padding.top - padding.bottom;
+            
+            const mapX = (x) => padding.left + ((x - state.minX) / (state.maxX - state.minX)) * plotWidth;
+            const mapZ = (z) => padding.top + plotHeight - ((z - state.minZ) / (state.maxZ - state.minZ)) * plotHeight;
+            
+            drawGridAndAxes(ctx, padding, plotWidth, plotHeight, state, '支距 (X)', '高程 (Z)');
+
+            Object.entries(dataSets).forEach(([type, data]) => {
+                if (data.length === 0) return;
+                
+                ctx.beginPath();
+                ctx.strokeStyle = PLOT_COLORS[type];
+                ctx.lineWidth = 2;
+                data.sort((a,b) => a.tableX - b.tableX).forEach((point, i) => {
+                    const x = mapX(point.tableX);
+                    const y = mapZ(point.tableZ);
+                    if (i === 0) {
+                        ctx.moveTo(x, y);
+                    } else {
+                        ctx.lineTo(x, y);
+                    }
+                });
+                ctx.stroke();
+            });
+
+            if (state.hoveredPoint) {
+                const point = state.hoveredPoint;
+                const x = mapX(point.tableX);
+                const y = mapZ(point.tableZ);
+
+                ctx.beginPath();
+                ctx.arc(x, y, 6, 0, 2 * Math.PI);
+                ctx.fillStyle = 'rgba(255, 0, 0, 0.7)';
+                ctx.fill();
+
+                const text = `支距: ${point.tableX.toFixed(3)}, 高程: ${point.tableZ.toFixed(3)}`; // 修正為 3 位小數
+                ctx.font = "bold 12px Arial";
+                const textMetrics = ctx.measureText(text);
+                const boxWidth = textMetrics.width + 10;
+                const boxHeight = 20;
+                let boxX = x + 15;
+                let boxY = y - 15 - boxHeight;
+
+                if (boxX + boxWidth > canvas.width) {
+                    boxX = x - boxWidth - 15; // 向左移動
+                }
+                if (boxY < 0) {
+                    boxY = y + 15; // 向下移動
+                }
+                
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                ctx.fillRect(boxX, boxY, boxWidth, boxHeight);
+                
+                ctx.fillStyle = 'white';
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(text, boxX + 5, boxY + boxHeight / 2);
+            }
+
+            drawLegend(ctx, padding);
+        }
+
+        function drawGridAndAxes(ctx, padding, plotWidth, plotHeight, state, xLabel, zLabel) {
+            ctx.font = "12px Arial";
+            ctx.fillStyle = "#333";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+
+            ctx.beginPath();
+            ctx.strokeStyle = "#ccc";
+            ctx.lineWidth = 1;
+            ctx.moveTo(padding.left, padding.top + plotHeight);
+            ctx.lineTo(padding.left + plotWidth, padding.top + plotHeight);
+            ctx.stroke();
+            
+            const xTickCount = 5;
+            for (let i = 0; i <= xTickCount; i++) {
+                const val = state.minX + (i / xTickCount) * (state.maxX - state.minX);
+                const x = padding.left + (i / xTickCount) * plotWidth;
+                ctx.fillText(val.toFixed(2), x, padding.top + plotHeight + 20);
+                ctx.beginPath();
+                ctx.moveTo(x, padding.top);
+                ctx.lineTo(x, padding.top + plotHeight);
+                ctx.stroke();
+            }
+             ctx.fillText(xLabel, padding.left + plotWidth / 2, padding.top + plotHeight + 35);
+
+            ctx.beginPath();
+            ctx.moveTo(padding.left, padding.top);
+            ctx.lineTo(padding.left, padding.top + plotHeight);
+            ctx.stroke();
+            
+            const zTickCount = 5;
+             ctx.textAlign = "right";
+            for (let i = 0; i <= zTickCount; i++) {
+                const val = state.minZ + (i / zTickCount) * (state.maxZ - state.minZ);
+                const y = padding.top + plotHeight - (i / zTickCount) * plotHeight;
+                ctx.fillText(val.toFixed(2), padding.left - 10, y);
+                 ctx.beginPath();
+                ctx.moveTo(padding.left, y);
+                ctx.lineTo(padding.left + plotWidth, y);
+                ctx.stroke();
+            }
+            ctx.save();
+            ctx.translate(15, padding.top + plotHeight / 2);
+            ctx.rotate(-Math.PI / 2);
+            ctx.textAlign = "center";
+            ctx.fillText(zLabel, 0, 0);
+            ctx.restore();
+        }
+
+        function drawLegend(ctx, padding) {
+             ctx.font = "12px Arial";
+             let xOffset = padding.left;
+             const legendItems = {
+                 '原地面': PLOT_COLORS.original,
+                 '刨除後': PLOT_COLORS.milled,
+                 '舖築後': PLOT_COLORS.paved,
+             };
+
+             Object.entries(legendItems).forEach(([label, color]) => {
+                 ctx.fillStyle = color;
+                 ctx.fillRect(xOffset, 10, 15, 10);
+                 ctx.fillStyle = "#333";
+                 ctx.textAlign = "left";
+                 ctx.textBaseline = "middle";
+                 ctx.fillText(label, xOffset + 20, 15);
+                 xOffset += ctx.measureText(label).width + 40;
+             });
+        }
+
+        function onWindowResize() {
+            Object.keys(seriesData).forEach(yVal => {
+                drawSingle2dPlot(yVal, false); // 視窗大小改變時，只重繪，不重置視圖
+            });
+        }
+        function animate() {
+            // 這個函式在這個版本中沒有作用，因為沒有 3D 場景或持續動畫
+        }
+        
+        document.addEventListener('DOMContentLoaded', init);
     </script>
 </body>
 </html>
