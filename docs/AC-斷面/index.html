@@ -275,6 +275,8 @@
                 </textarea>
             </div>
             <button id="plotButton">繪製圖形</button>
+            <button id="generateShareLinkButton">產生分享連結</button>
+            <div id="copyLinkMessage">連結已複製到剪貼簿！</div>
         </div>
         
         <div class="control-group">
@@ -305,6 +307,7 @@
             // DOM 元素
             const plotButton = document.getElementById('plotButton');
             const zScaleInput = document.getElementById('zScaleInput');
+            const generateShareLinkButton = document.getElementById('generateShareLinkButton');
 
             // 事件監聽器
             plotButton.addEventListener('click', updatePlot);
@@ -314,8 +317,15 @@
                     drawSingle2dPlot(yVal, false);
                 });
             });
+            generateShareLinkButton.addEventListener('click', generateShareLink);
 
-            updatePlot();
+
+            // 檢查 URL 中是否有數據，如果有則載入
+            loadDataFromUrl(); 
+            // 如果 URL 沒有數據，或載入後，就呼叫 updatePlot 繪製初始圖表
+            if (Object.keys(seriesData).length === 0) {
+                 updatePlot();
+            }
         }
 
         // setupCanvasEvents 函式現在只處理滑鼠移動和離開事件，不再處理拖曳和滾輪縮放
@@ -712,11 +722,70 @@
 
         function onWindowResize() {
             Object.keys(seriesData).forEach(yVal => {
-                drawSingle2dPlot(yVal, false); // 視窗大小改變時，只重繪，不重置視圖
+                // 視窗大小改變時，需要重新計算 Z 軸比例，因此傳入 true
+                drawSingle2dPlot(yVal, true); 
             });
         }
         function animate() {
             // 這個函式在這個版本中沒有作用，因為沒有 3D 場景或持續動畫
+        }
+        
+        // --- 分享連結功能 ---
+        function generateShareLink() {
+            const originalData = document.getElementById('dataInput-original').value;
+            const milledData = document.getElementById('dataInput-milled').value;
+            const pavedData = document.getElementById('dataInput-paved').value;
+            const zScale = document.getElementById('zScaleInput').value;
+
+            // Base64 編碼數據以避免 URL 參數中的特殊字元問題
+            const encodedOriginal = btoa(encodeURIComponent(originalData));
+            const encodedMilled = btoa(encodeURIComponent(milledData));
+            const encodedPaved = btoa(encodeURIComponent(pavedData));
+
+            // 構建包含數據的 URL
+            const baseUrl = window.location.origin + window.location.pathname;
+            const shareUrl = `${baseUrl}?original=${encodedOriginal}&milled=${encodedMilled}&paved=${encodedPaved}&zscale=${zScale}`;
+
+            // 將連結複製到剪貼簿
+            navigator.clipboard.writeText(shareUrl).then(() => {
+                const messageDiv = document.getElementById('copyLinkMessage');
+                messageDiv.style.display = 'block';
+                setTimeout(() => {
+                    messageDiv.style.display = 'none';
+                }, 3000); // 3 秒後隱藏提示
+            }).catch(err => {
+                console.error('複製連結失敗:', err);
+                alert('複製連結失敗，請手動複製: ' + shareUrl);
+            });
+        }
+
+        function loadDataFromUrl() {
+            const params = new URLSearchParams(window.location.search);
+            const originalData = params.get('original');
+            const milledData = params.get('milled');
+            const pavedData = params.get('paved');
+            const zScale = params.get('zscale');
+
+            let dataLoaded = false;
+            if (originalData) {
+                document.getElementById('dataInput-original').value = decodeURIComponent(atob(originalData));
+                dataLoaded = true;
+            }
+            if (milledData) {
+                document.getElementById('dataInput-milled').value = decodeURIComponent(atob(milledData));
+                dataLoaded = true;
+            }
+            if (pavedData) {
+                document.getElementById('dataInput-paved').value = decodeURIComponent(atob(pavedData));
+                dataLoaded = true;
+            }
+            if (zScale) {
+                document.getElementById('zScaleInput').value = zScale;
+            }
+
+            if (dataLoaded) {
+                updatePlot(); // 如果從 URL 載入數據，則自動繪圖
+            }
         }
         
         document.addEventListener('DOMContentLoaded', init);
