@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AC道路鋪設高程視覺化圖表 (Canvas版)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: #f8fafc;
+            color: #1f2937;
+        }
+        .input-group { display: flex; flex-direction: column; }
+        .input-group label { font-size: 0.875rem; font-weight: 500; color: #4b5563; margin-bottom: 0.25rem; }
+        .input-group input, .input-group textarea { padding: 0.5rem 0.75rem; border: 1px solid #d1d5db; border-radius: 0.375rem; width: 100%; }
+        .action-button { background-color: #2563eb; color: white; font-weight: 600; padding: 0.6rem 1rem; border-radius: 0.375rem; border: none; cursor: pointer; transition: background-color 0.2s; }
+        .action-button:hover { background-color: #1d4ed8; }
+        .secondary-button { background-color: #6b7280; color: white; font-size: 0.875rem; font-weight: 500; padding: 0.5rem 1rem; border-radius: 0.375rem; border: none; cursor: pointer; transition: background-color: 0.2s; }
+        .secondary-button:hover { background-color: #4b5563; }
+        .row-action-btn { background-color: #e5e7eb; color: #374151; font-size: 0.75rem; padding: 0.125rem 0.5rem; border-radius: 0.25rem; margin: 0 0.125rem; border: 1px solid #d1d5db; }
+        .row-action-btn:hover { background-color: #d1d5db; }
+        #customPavingCanvas { cursor: grab; }
+        #customPavingCanvas:active { cursor: grabbing; }
+        #dataTableContainer { max-height: 480px; overflow-y: auto; }
+        #dataTable thead { position: sticky; top: 0; background-color: #f9fafb; z-index: 10; }
+        .elevation-input { width: 100%; background-color: #eff6ff; text-align: center; border: 1px solid #dbeafe; border-radius: 4px; padding: 2px; transition: border-color 0.3s; }
+        .thickness-cell.out-of-range { color: #ef4444; font-weight: bold; }
+        .table-avg-hidden .avg-elev-col { display: none; }
+        .table-actions-hidden .actions-col { display: none; }
+        .highlight-diff { border-color: #f59e0b; border-width: 2px; }
+        .instructions-content.hidden { display: none; }
+    </style>
+</head>
+<body class="p-4">
+    <div class="w-full max-w-7xl mx-auto bg-white p-6 md:p-8 rounded-2xl shadow-xl">
+        <div class="mb-4 text-center">
+            <h1 class="text-2xl md:text-3xl font-bold text-gray-800">AC道路鋪設方案 視覺化分析</h1>
+            <p class="text-gray-500 mt-2">使用原生Canvas繪製，提供更佳的平順度演算法與自訂數據功能。</p>
+        </div>
+
+        <div id="instructionsContainer" class="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4 transition-all">
+            <button id="toggleInstructionsBtn" class="font-bold text-lg text-blue-700 w-full text-left flex items-center justify-between">
+                <span>使用說明</span>
+                <span id="instruction-arrow">►</span>
+            </button>
+            <div id="instructionsContent" class="mt-4 space-y-3 text-gray-700 text-sm hidden instructions-content">
+                <ul class="list-disc list-inside space-y-2">
+                    <li><b>基本設定:</b> 在上方設定最小、最大及目標平均鋪設厚度。</li>
+                    <li><b>數據與計算:</b>
+                        <ul class="list-['-_'] list-inside ml-4">
+                            <li>於「高程數據」框中貼上新的高程資料 (每行一筆)。</li>
+                            <li>點擊「套用設定並重新計算平順曲線」按鈕，系統會根據您的設定與數據，執行全域平順化計算。</li>
+                        </ul>
+                    </li>
+                    <li><b>圖表互動:</b>
+                        <ul class="list-['-_'] list-inside ml-4">
+                             <li><b>平移:</b> 在圖表上按住滑鼠左鍵並拖曳。</li>
+                             <li><b>縮放:</b> 在圖表上滾動滑鼠滾輪。</li>
+                             <li><b>詳細資訊:</b> 滑鼠指標懸浮於曲線上，即可顯示該點的詳細數據。</li>
+                        </ul>
+                    </li>
+                    <li><b>列表微調與匯出:</b>
+                         <ul class="list-['-_'] list-inside ml-4">
+                             <li><b>手動修改:</b> 直接在列表的「完工高程」欄位輸入數值，圖表與相關數據會即時更新。</li>
+                             <li><b>欄位切換:</b> 點擊列表上方的按鈕，可顯示或隱藏「完工三點平均」及「操作」欄位。</li>
+                             <li><b>數據複製:</b> 點擊「複製表格數據」按鈕，即可將完整數據複製到剪貼簿，方便貼至Excel等軟體。</li>
+                             <li><b>單點操作:</b> 在「操作」欄中，可針對單點執行「均」(套用三點平均)、「小」(設為最小厚度)、「大」(設為最大厚度)。</li>
+                         </ul>
+                    </li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6 p-4 border border-gray-200 rounded-lg">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div class="input-group">
+                    <label for="minThickness">最小厚度 (cm)</label>
+                    <input type="number" id="minThickness" value="5">
+                </div>
+                <div class="input-group">
+                    <label for="maxThickness">最大厚度 (cm)</label>
+                    <input type="number" id="maxThickness" value="10">
+                </div>
+                <div class="input-group">
+                    <label for="avgThickness">目標平均厚度 (cm)</label>
+                    <input type="number" id="avgThickness" value="8">
+                </div>
+            </div>
+             <div class="input-group">
+                <label for="dataInput">高程數據 (每行一筆)</label>
+                <textarea id="dataInput" rows="4" class="text-sm"></textarea>
+            </div>
+        </div>
+        <div class="flex justify-center mb-6">
+            <button id="recalculateBtn" class="action-button w-full sm:w-auto">套用設定並重新計算平順曲線</button>
+        </div>
+
+        <div>
+            <div class="relative w-full h-[60vh] mb-8 bg-gray-50 rounded-lg border">
+                <canvas id="customPavingCanvas"></canvas>
+            </div>
+            <div class="flex justify-between items-center mb-2 gap-2">
+                 <button id="copyDataBtn" class="action-button">複製表格數據</button>
+                 <div class="flex justify-end gap-2">
+                    <button id="applyAvgBtn" class="secondary-button">套用三點平均 (全體)</button>
+                    <button id="toggleAvgColBtn" class="secondary-button">顯示/隱藏平均高程</button>
+                    <button id="toggleActionsColBtn" class="secondary-button">顯示/隱藏操作欄</button>
+                </div>
+            </div>
+            <div id="dataTableContainer" class="border border-gray-200 rounded-lg">
+                <table id="dataTable" class="w-full text-sm text-left text-gray-500 table-avg-hidden table-actions-hidden">
+                    <thead class="text-xs text-gray-700 uppercase">
+                        <tr>
+                            <th scope="col" class="px-2 py-3">樁號</th>
+                            <th scope="col" class="px-2 py-3">現有高程(m)</th>
+                            <th scope="col" class="px-2 py-3 avg-elev-col">完工三點平均(m)</th>
+                            <th scope="col" class="px-2 py-3">完工高程(m)</th>
+                            <th scope="col" class="px-2 py-3">鋪設厚度(cm)</th>
+                            <th scope="col" class="px-2 py-3 actions-col">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            <div class="mt-2 text-center text-sm text-gray-500" id="infoText"></div>
+        </div>
+    </div>
+
+    <script>
+        const initialData = [1.936, 1.904, 1.875, 1.827, 1.747, 1.67, 1.686, 1.706, 1.696, 1.65, 1.595, 1.555, 1.516, 1.431, 1.341, 1.256, 1.145, 1.005, 0.906, 0.802, 0.67, 0.566, 0.461, 0.39, 0.305, 0.24, 0.234, 0.2, 0.171, 0.158, 0.158, 0.175];
+        let stations = [];
+        let existingElevations = [];
+        let proposedElevations = [];
+
+        const minThicknessInput = document.getElementById('minThickness');
+        const maxThicknessInput = document.getElementById('maxThickness');
+        const avgThicknessInput = document.getElementById('avgThickness');
+        const dataInput = document.getElementById('dataInput');
+        const recalculateBtn = document.getElementById('recalculateBtn');
+        const toggleInstructionsBtn = document.getElementById('toggleInstructionsBtn');
+        const instructionsContent = document.getElementById('instructionsContent');
+        const instructionArrow = document.getElementById('instruction-arrow');
+        const toggleAvgColBtn = document.getElementById('toggleAvgColBtn');
+        const toggleActionsColBtn = document.getElementById('toggleActionsColBtn');
+        const applyAvgBtn = document.getElementById('applyAvgBtn');
+        const copyDataBtn = document.getElementById('copyDataBtn');
+        const infoText = document.getElementById('infoText');
+        const canvas = document.getElementById('customPavingCanvas');
+        const ctx = canvas.getContext('2d');
+        const dataTable = document.getElementById('dataTable');
+        const dataTableBody = dataTable.querySelector("tbody");
+        
+        let view = { scale: 1.0, x: 0, y: 0 };
+        let isPanning = false;
+        let lastMousePos = { x: 0, y: 0 };
+        let lastHoverIndex = -1;
+
+        function calculateSmoothCurve(existing, minThick, maxThick, targetAvg) {
+            const n = existing.length;
+            if (n === 0) return [];
+            const minThickM = minThick / 100;
+            const maxThickM = maxThick / 100;
+            const targetAvgM = targetAvg / 100;
+
+            let smoothed = existing.map(e => e + targetAvgM);
+            
+            for (let iter = 0; iter < 200; iter++) { 
+                let tempSmoothed = [...smoothed];
+                if (n > 2) {
+                    for (let i = 1; i < n - 1; i++) {
+                        tempSmoothed[i] = (smoothed[i - 1] * 0.3 + smoothed[i] * 0.4 + smoothed[i + 1] * 0.3);
+                    }
+                }
+                smoothed = tempSmoothed;
+                for (let i = 0; i < n; i++) {
+                    const lower = existing[i] + minThickM;
+                    const upper = existing[i] + maxThickM;
+                    smoothed[i] = Math.max(lower, Math.min(upper, smoothed[i]));
+                }
+            }
+             let currentAvgThickness = smoothed.reduce((sum, val, i) => sum + (val - existing[i]), 0) / n;
+             let offset = targetAvgM - currentAvgThickness;
+             smoothed = smoothed.map(val => val + offset);
+             for (let i = 0; i < n; i++) {
+                 const lower = existing[i] + minThickM;
+                 const upper = existing[i] + maxThickM;
+                 smoothed[i] = Math.max(lower, Math.min(upper, smoothed[i]));
+             }
+            return smoothed;
+        }
+
+        function getChartMetrics() {
+            const parent = canvas.parentElement;
+            const padding = { top: 40, right: 40, bottom: 50, left: 60 };
+            const chartWidth = parent.clientWidth - padding.left - padding.right;
+            const chartHeight = parent.clientHeight - padding.top - padding.bottom;
+            
+            const allValues = [...existingElevations, ...proposedElevations];
+            const yMin = existingElevations.length > 0 ? Math.min(...allValues) - 0.1 : 0;
+            const yMax = existingElevations.length > 0 ? Math.max(...allValues) + 0.1 : 1;
+            const xMin = stations.length > 0 ? stations[0] : 0;
+            const xMax = stations.length > 0 ? stations[stations.length - 1] : 1;
+
+            const scaleX = chartWidth / (xMax - xMin || 1);
+            const scaleY = chartHeight / (yMax - yMin || 1);
+            
+            return { padding, chartWidth, chartHeight, xMin, yMin, xMax, yMax, scaleX, scaleY };
+        }
+        
+        function drawCustomChart(highlightIndex = -1, mousePos = null) {
+            const minThick = parseFloat(minThicknessInput.value) || 0;
+            const maxThick = parseFloat(maxThicknessInput.value) || 0;
+
+            const parent = canvas.parentElement;
+            canvas.width = parent.clientWidth * window.devicePixelRatio;
+            canvas.height = parent.clientHeight * window.devicePixelRatio;
+            canvas.style.width = `${parent.clientWidth}px`;
+            canvas.style.height = `${parent.clientHeight}px`;
+            ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+            
+            if (existingElevations.length < 2) {
+                ctx.clearRect(0, 0, parent.clientWidth, parent.clientHeight);
+                ctx.fillText("數據不足，無法繪製圖表。", 20, 40);
+                return;
+            }
+            
+            const metrics = getChartMetrics();
+            const { padding, xMin, yMin, scaleX, scaleY } = metrics;
+            
+            const toCanvasX = (val) => padding.left + (val - xMin) * scaleX;
+            const toCanvasY = (val) => padding.top + metrics.chartHeight - (val - yMin) * scaleY;
+            
+            ctx.clearRect(0, 0, parent.clientWidth, parent.clientHeight);
+            ctx.save();
+            ctx.translate(view.x, view.y);
+            ctx.scale(view.scale, view.scale);
+
+            ctx.font = '12px ' + getComputedStyle(document.body).fontFamily;
+            ctx.lineWidth = 1 / view.scale;
+            const yTicks = 5;
+            for (let i = 0; i <= yTicks; i++) {
+                const val = metrics.yMin + (metrics.yMax - metrics.yMin) * i / yTicks;
+                const y = toCanvasY(val);
+                ctx.beginPath();
+                ctx.moveTo(toCanvasX(metrics.xMin), y);
+                ctx.lineTo(toCanvasX(metrics.xMax), y);
+                ctx.strokeStyle = '#e5e7eb';
+                ctx.stroke();
+            }
+            const xTicks = Math.min(10, stations.length > 1 ? stations.length-1 : 1);
+            for (let i = 0; i <= xTicks; i++) {
+                const stationIndex = Math.floor((stations.length - 1) * i / xTicks);
+                const val = stations[stationIndex];
+                const x = toCanvasX(val);
+                ctx.beginPath();
+                ctx.moveTo(x, toCanvasY(metrics.yMin));
+                ctx.lineTo(x, toCanvasY(metrics.yMax));
+                ctx.strokeStyle = '#e5e7eb';
+                ctx.stroke();
+            }
+            
+            const lowerBound = existingElevations.map(e => e + minThick / 100);
+            const upperBound = existingElevations.map(e => e + maxThick / 100);
+            
+            ctx.beginPath();
+            ctx.moveTo(toCanvasX(stations[0]), toCanvasY(upperBound[0]));
+            for (let i = 1; i < stations.length; i++) ctx.lineTo(toCanvasX(stations[i]), toCanvasY(upperBound[i]));
+            for (let i = stations.length - 1; i >= 0; i--) ctx.lineTo(toCanvasX(stations[i]), toCanvasY(lowerBound[i]));
+            ctx.closePath();
+            ctx.fillStyle = 'rgba(156, 163, 175, 0.2)';
+            ctx.fill();
+
+            const drawLine = (data, color, width, dashed = false) => {
+                 if(data.length < 2) return;
+                 ctx.beginPath();
+                 ctx.moveTo(toCanvasX(stations[0]), toCanvasY(data[0]));
+                 for (let i = 1; i < data.length; i++) ctx.lineTo(toCanvasX(stations[i]), toCanvasY(data[i]));
+                 ctx.strokeStyle = color;
+                 ctx.lineWidth = width / view.scale;
+                 if (dashed) ctx.setLineDash([5 / view.scale, 5 / view.scale]);
+                 ctx.stroke();
+                 ctx.setLineDash([]);
+            };
+            
+            drawLine(existingElevations, 'rgb(59, 130, 246)', 2, true);
+            drawLine(proposedElevations, 'rgb(249, 115, 22)', 3);
+            
+            ctx.restore();
+
+            ctx.fillStyle = '#6b7281';
+            ctx.font = '12px ' + getComputedStyle(document.body).fontFamily;
+            for (let i = 0; i <= yTicks; i++) {
+                const val = metrics.yMin + (metrics.yMax - metrics.yMin) * i / yTicks;
+                const y = toCanvasY(val) * view.scale + view.y;
+                ctx.textAlign = 'right';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(val.toFixed(2), padding.left - 10, y);
+            }
+            for (let i = 0; i <= xTicks; i++) {
+                 const stationIndex = Math.floor((stations.length - 1) * i / xTicks);
+                 const val = stations[stationIndex];
+                 const x = toCanvasX(val) * view.scale + view.x;
+                 ctx.textAlign = 'center';
+                 ctx.textBaseline = 'top';
+                 ctx.fillText(val, x, padding.top + metrics.chartHeight + 10);
+            }
+            
+            if(highlightIndex !== -1 && mousePos && proposedElevations[highlightIndex] !== undefined && existingElevations[highlightIndex] !== undefined){
+                 const x = toCanvasX(stations[highlightIndex]) * view.scale + view.x;
+                 ctx.beginPath();
+                 ctx.moveTo(x, padding.top);
+                 ctx.lineTo(x, padding.top + metrics.chartHeight);
+                 ctx.strokeStyle = '#ef4444';
+                 ctx.lineWidth = 1;
+                 ctx.stroke();
+                 
+                 const thickness = (proposedElevations[highlightIndex] - existingElevations[highlightIndex]) * 100;
+                 const textLines = [
+                     `樁號: ${stations[highlightIndex]}m`,
+                     `現有高程: ${existingElevations[highlightIndex].toFixed(3)}m`,
+                     `完工高程: ${proposedElevations[highlightIndex].toFixed(3)}m`,
+                     `鋪設厚度: ${thickness.toFixed(1)}cm`,
+                 ];
+                 
+                 ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+                 const boxWidth = 180;
+                 const boxHeight = textLines.length * 18 + 10;
+                 const boxX = (mousePos.x + 15 + boxWidth > parent.clientWidth) ? mousePos.x - 15 - boxWidth : mousePos.x + 15;
+                 const boxY = mousePos.y + 15;
+                 ctx.fillRect(boxX, boxY, boxWidth, boxHeight);
+                 
+                 ctx.fillStyle = 'white';
+                 ctx.font = '12px ' + getComputedStyle(document.body).fontFamily;
+                 ctx.textAlign = 'left';
+                 textLines.forEach((line, i) => {
+                     ctx.fillText(line, boxX + 10, boxY + 18 + i*18);
+                 });
+            }
+        }
+        
+        function renderDataTable() {
+            let tableHTML = '';
+            const minThick = parseFloat(minThicknessInput.value);
+            const maxThick = parseFloat(maxThicknessInput.value);
+
+            for (let i = 0; i < stations.length; i++) {
+                const thickness = (proposedElevations[i] - existingElevations[i]) * 100;
+                const isOutOfRange = thickness < minThick || thickness > maxThick;
+                const thicknessClass = isOutOfRange ? 'out-of-range' : '';
+                
+                let avgElev = NaN;
+                if (i > 0 && i < stations.length - 1) {
+                    avgElev = (proposedElevations[i-1] + proposedElevations[i] + proposedElevations[i+1]) / 3;
+                }
+                
+                let highlightClass = '';
+                if (!isNaN(avgElev) && Math.abs(avgElev - proposedElevations[i]) > 0.015) {
+                    highlightClass = 'highlight-diff';
+                }
+
+                tableHTML += `
+                    <tr class="bg-white border-b hover:bg-gray-50">
+                        <td class="px-2 py-2 font-medium text-gray-900">${stations[i]}m</td>
+                        <td class="px-2 py-2">${existingElevations[i].toFixed(3)}</td>
+                        <td class="px-2 py-2 avg-elev-col text-gray-500">${isNaN(avgElev) ? 'N/A' : avgElev.toFixed(3)}</td>
+                        <td class="px-2 py-2">
+                            <input type="number" step="0.001" value="${proposedElevations[i].toFixed(3)}" class="elevation-input ${highlightClass}" data-index="${i}">
+                        </td>
+                        <td class="px-2 py-2 font-semibold thickness-cell ${thicknessClass}">${thickness.toFixed(1)}</td>
+                        <td class="px-2 py-2 text-center actions-col">
+                            <button class="row-action-btn" data-action="apply-avg" data-index="${i}" title="套用三點平均">均</button>
+                            <button class="row-action-btn" data-action="set-min" data-index="${i}" title="設為最小厚度">小</button>
+                            <button class="row-action-btn" data-action="set-max" data-index="${i}" title="設為最大厚度">大</button>
+                        </td>
+                    </tr>
+                `;
+            }
+            dataTableBody.innerHTML = tableHTML;
+        }
+
+        function updateApp() {
+            const minThick = parseFloat(minThicknessInput.value);
+            const maxThick = parseFloat(maxThicknessInput.value);
+            const avgThick = parseFloat(avgThicknessInput.value);
+
+            const newDataRaw = dataInput.value.trim();
+            if(newDataRaw){
+                 existingElevations = newDataRaw.split(/[\n, ]+/).map(Number).filter(n => !isNaN(n));
+                 stations = existingElevations.map((_, i) => i * 10);
+            }
+
+            if (isNaN(minThick) || isNaN(maxThick) || isNaN(avgThick) || minThick >= maxThick) {
+                infoText.innerHTML = '<p class="text-red-500">請輸入有效的數值，且最小厚度需小於最大厚度。</p>';
+                return;
+            }
+
+            proposedElevations = calculateSmoothCurve(existingElevations, minThick, maxThick, avgThick);
+            drawCustomChart();
+            renderDataTable();
+
+            if(proposedElevations.length > 0){
+                const finalAvgThickness = proposedElevations.reduce((sum, val, i) => sum + (val - existingElevations[i]), 0) / proposedElevations.length * 100;
+                infoText.innerHTML = `<p class="text-green-600 font-semibold">計算完成。全域平順化後，平均厚度約為: <strong>${finalAvgThickness.toFixed(2)} 公分</strong>。</p>`;
+            } else {
+                 infoText.innerHTML = '<p class="text-gray-500">請輸入數據以開始計算。</p>';
+            }
+        }
+        
+        function manualUpdate() {
+            renderDataTable();
+            drawCustomChart();
+            if(proposedElevations.length > 0){
+                const finalAvgThickness = proposedElevations.reduce((sum, val, i) => sum + (val - existingElevations[i]), 0) / proposedElevations.length * 100;
+                infoText.innerHTML = `<p class="text-blue-600 font-semibold">手動調整中... 目前平均厚度約為: <strong>${finalAvgThickness.toFixed(2)} 公分</strong>。</p>`;
+            }
+        }
+
+        recalculateBtn.addEventListener('click', updateApp);
+
+        toggleInstructionsBtn.addEventListener('click', () => {
+            const isHidden = instructionsContent.classList.toggle('hidden');
+            instructionArrow.textContent = isHidden ? '►' : '▼';
+        });
+
+        toggleAvgColBtn.addEventListener('click', () => {
+            dataTable.classList.toggle('table-avg-hidden');
+        });
+        
+        toggleActionsColBtn.addEventListener('click', () => {
+            dataTable.classList.toggle('table-actions-hidden');
+        });
+
+        applyAvgBtn.addEventListener('click', () => {
+            if (proposedElevations.length < 3) return;
+            const tempElevations = [...proposedElevations];
+            for (let i = 1; i < tempElevations.length - 1; i++) {
+                proposedElevations[i] = (tempElevations[i-1] + tempElevations[i] + tempElevations[i+1]) / 3;
+            }
+            manualUpdate();
+            infoText.innerHTML = `<p class="text-blue-600 font-semibold">已套用三點平均進行平順化。</p>`;
+        });
+        
+        copyDataBtn.addEventListener('click', () => {
+            let csvContent = "樁號,現有高程(m),完工高程(m),鋪設厚度(cm)\n";
+            for (let i = 0; i < stations.length; i++) {
+                const thickness = (proposedElevations[i] - existingElevations[i]) * 100;
+                csvContent += `${stations[i]},${existingElevations[i].toFixed(3)},${proposedElevations[i].toFixed(3)},${thickness.toFixed(1)}\n`;
+            }
+            
+            const textarea = document.createElement('textarea');
+            textarea.value = csvContent;
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textarea);
+
+            const originalText = copyDataBtn.textContent;
+            copyDataBtn.textContent = '已複製!';
+            copyDataBtn.disabled = true;
+            setTimeout(() => {
+                copyDataBtn.textContent = originalText;
+                copyDataBtn.disabled = false;
+            }, 2000);
+        });
+
+        dataTableBody.addEventListener('input', (e) => {
+            if (e.target.classList.contains('elevation-input')) {
+                const index = parseInt(e.target.dataset.index);
+                const newElevation = parseFloat(e.target.value);
+                if (!isNaN(newElevation)) {
+                    proposedElevations[index] = newElevation;
+                    manualUpdate();
+                }
+            }
+        });
+
+        dataTableBody.addEventListener('click', (e) => {
+            const target = e.target.closest('.row-action-btn');
+            if (!target) return;
+            
+            const action = target.dataset.action;
+            const index = parseInt(target.dataset.index);
+            
+            if (isNaN(index)) return;
+
+            if (action === 'apply-avg') {
+                if (index > 0 && index < proposedElevations.length - 1) {
+                    const avg = (proposedElevations[index-1] + proposedElevations[index] + proposedElevations[index+1]) / 3;
+                    proposedElevations[index] = avg;
+                }
+            } else if (action === 'set-min') {
+                const minThick = parseFloat(minThicknessInput.value) / 100;
+                if(!isNaN(minThick)) proposedElevations[index] = existingElevations[index] + minThick;
+            } else if (action === 'set-max') {
+                const maxThick = parseFloat(maxThicknessInput.value) / 100;
+                if(!isNaN(maxThick)) proposedElevations[index] = existingElevations[index] + maxThick;
+            }
+            manualUpdate();
+        });
+        
+        canvas.addEventListener('mousedown', e => {
+            isPanning = true;
+            lastMousePos = { x: e.clientX, y: e.clientY };
+        });
+
+        canvas.addEventListener('mousemove', e => {
+            const mouse = { x: e.offsetX, y: e.offsetY };
+            if (isPanning) {
+                const dx = e.clientX - lastMousePos.x;
+                const dy = e.clientY - lastMousePos.y;
+                view.x += dx;
+                view.y += dy;
+                lastMousePos = { x: e.clientX, y: e.clientY };
+                drawCustomChart(lastHoverIndex, mouse);
+            } else {
+                 const metrics = getChartMetrics();
+                 if(!metrics) return;
+                 const worldX = ((mouse.x/window.devicePixelRatio - view.x) - metrics.padding.left) / metrics.scaleX / view.scale + metrics.xMin;
+                 let closestIndex = -1;
+                 let minDistance = Infinity;
+
+                 for (let i = 0; i < stations.length; i++) {
+                     const distance = Math.abs(worldX - stations[i]);
+                     if (distance < minDistance) {
+                         minDistance = distance;
+                         closestIndex = i;
+                     }
+                 }
+                
+                 if (closestIndex !== lastHoverIndex) {
+                    lastHoverIndex = closestIndex;
+                    if( (minDistance * metrics.scaleX * view.scale) > 20){
+                        lastHoverIndex = -1;
+                    }
+                    drawCustomChart(lastHoverIndex, mouse);
+                 }
+            }
+        });
+
+        window.addEventListener('mouseup', () => { isPanning = false; });
+        canvas.addEventListener('mouseleave', () => {
+             if(lastHoverIndex !== -1){
+                lastHoverIndex = -1;
+                drawCustomChart();
+             }
+        });
+
+        canvas.addEventListener('wheel', e => {
+            e.preventDefault();
+            const scaleAmount = 1.1;
+            const mouse = { x: e.offsetX, y: e.offsetY };
+            const zoomDirection = e.deltaY > 0 ? 1 / scaleAmount : scaleAmount;
+            
+            view.x = mouse.x - (mouse.x - view.x) * zoomDirection;
+            view.y = mouse.y - (mouse.y - view.y) * zoomDirection;
+            view.scale *= zoomDirection;
+            
+            drawCustomChart();
+        });
+        
+        window.onload = () => {
+            dataInput.value = initialData.join('\n');
+            existingElevations = [...initialData];
+            stations = existingElevations.map((_, i) => i * 10);
+            updateApp();
+        };
+
+        window.onresize = updateApp;
+    </script>
+</body>
+</html>
