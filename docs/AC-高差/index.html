@@ -6,8 +6,8 @@
     <title>道路高程斷面分析工具 (分享版)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <!-- pako.js is no longer needed for sharing, but kept for potential future use or if a fallback is desired -->
-    <!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script> -->
+    <!-- Re-enabling pako.js for robust, client-side data compression -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         body {
@@ -69,7 +69,7 @@
             <button id="processButton" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg shadow-lg transition-transform transform hover:scale-105">
                 處理資料並分析
             </button>
-            <button id="shareButton" class="bg-teal-500 hover:bg-teal-600 text-white font-bold py-3 px-6 rounded-lg shadow-lg transition-transform transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed">
+            <button id="shareButton" class="bg-teal-500 hover:bg-teal-600 text-white font-bold py-3 px-6 rounded-lg shadow-lg transition-transform transform hover:scale-105">
                 分享結果
             </button>
         </div>
@@ -136,7 +136,6 @@
         let originalDataMap = {};
         let planedDataMap = {};
         let allSortedMileages = [];
-        const JSON_BIN_SERVICE = 'https://api.npoint.io/';
 
         // --- 核心功能 ---
         function parseData(dataString) {
@@ -287,51 +286,43 @@
             container.innerHTML = tableHTML + '</tbody></table>';
         }
 
-        // --- 分享功能 (NEW) ---
-        async function generateShareLink() {
-            const originalButtonText = shareButton.innerHTML;
-            shareButton.disabled = true;
-            shareButton.innerHTML = '生成中...';
-            errorMessageDiv.textContent = '';
-
+        // --- 分享功能 (URL Compression Method) ---
+        function generateShareLink() {
             try {
+                errorMessageDiv.textContent = '';
                 const dataToShare = {
                     n1: section1NameEl.value, n2: section2NameEl.value,
                     d1: originalDataEl.value, d2: planedDataEl.value,
                     c: customOffsetsEl.value
                 };
-
-                const response = await fetch(JSON_BIN_SERVICE, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(dataToShare)
-                });
-
-                if (!response.ok) throw new Error(`雲端服務錯誤: ${response.statusText}`);
+                const jsonString = JSON.stringify(dataToShare);
+                const compressed = pako.deflate(jsonString, { to: 'string' });
+                const base64 = btoa(compressed);
+                const urlSafeBase64 = encodeURIComponent(base64);
                 
-                const result = await response.json();
-                const binId = result.id.split('/').pop();
+                const shareUrl = `${window.location.protocol}//${window.location.host}${window.location.pathname}?data=${urlSafeBase64}`;
                 
-                const shareUrl = `${window.location.protocol}//${window.location.host}${window.location.pathname}?bin=${binId}`;
+                if(shareUrl.length > 2000) {
+                    errorMessageDiv.textContent = '警告: 產生的分享連結過長，可能無法在所有平台正常運作。請考慮減少資料量。';
+                }
+                
                 document.getElementById('shareLinkInput').value = shareUrl;
                 openShareModal();
 
             } catch (e) {
                 errorMessageDiv.textContent = '生成分享連結失敗: ' + e.message;
-            } finally {
-                shareButton.disabled = false;
-                shareButton.innerHTML = originalButtonText;
             }
         }
 
-        async function loadDataFromUrl() {
+        function loadDataFromUrl() {
             const urlParams = new URLSearchParams(window.location.search);
-            const binId = urlParams.get('bin');
-            if (binId) {
+            const dataParam = urlParams.get('data');
+            if (dataParam) {
                 try {
-                    const response = await fetch(`${JSON_BIN_SERVICE}${binId}`);
-                    if (!response.ok) throw new Error('無法從雲端讀取資料。');
-                    const data = await response.json();
+                    const base64 = decodeURIComponent(dataParam);
+                    const compressed = atob(base64);
+                    const jsonString = pako.inflate(compressed, { to: 'string' });
+                    const data = JSON.parse(jsonString);
 
                     if (data.n1) section1NameEl.value = data.n1;
                     if (data.n2) section2NameEl.value = data.n2;
@@ -343,7 +334,7 @@
                     if (data.c) setTimeout(() => summaryButton.click(), 100);
 
                 } catch (e) {
-                    errorMessageDiv.textContent = '讀取分享資料時發生錯誤: ' + e.message;
+                    errorMessageDiv.textContent = '讀取分享資料時發生錯誤。連結可能已損毀或格式不符。';
                     loadDefaultData();
                 }
             } else {
