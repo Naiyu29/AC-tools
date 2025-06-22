@@ -6,7 +6,8 @@
     <title>道路高程斷面分析工具 (分享版)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
+    <!-- pako.js is no longer needed for sharing, but kept for potential future use or if a fallback is desired -->
+    <!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script> -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         body {
@@ -26,25 +27,41 @@
         #shareModal {
             transition: opacity 0.3s ease-in-out;
         }
+        .input-title {
+            background-color: transparent;
+            border: none;
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: #374151; /* text-gray-700 */
+            width: 100%;
+            padding: 0.25rem 0.5rem;
+            margin-left: -0.5rem;
+            border-radius: 0.25rem;
+        }
+        .input-title:focus {
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.5); /* ring-2 ring-blue-500 */
+            background-color: #f9fafb; /* bg-gray-50 */
+        }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800">
 
     <div class="container mx-auto p-4 md:p-8">
         <header class="text-center mb-8">
-            <h1 class="text-3xl md:text-4xl font-bold text-gray-900">道路高程斷面分析工具</h1>
-            <p class="mt-2 text-gray-600">請貼上資料，可個別查看斷面圖，或生成全里程高程差總表，並分享結果。</p>
+            <h1 class="text-3xl md:text-4xl font-bold text-gray-900">通用斷面分析工具</h1>
+            <p class="mt-2 text-gray-600">輸入兩組斷面資料，計算高程差與面積，並產生分享連結。</p>
         </header>
 
         <!-- 資料輸入區 -->
         <div class="grid grid-cols-1 gap-6 mb-6">
             <div class="data-card">
-                <h2 class="text-xl font-semibold mb-3 text-gray-700">1. AC道路原有高程資料</h2>
-                <textarea id="originalData" class="w-full h-48 p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition" placeholder="請在此貼上原始地面資料..."></textarea>
+                <input type="text" id="section1Name" class="input-title mb-3" value="斷面 1 (e.g. 原有高程)">
+                <textarea id="originalData" class="w-full h-48 p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition" placeholder="格式: 里程 高程1 高程2... 支距1 支距2..."></textarea>
             </div>
             <div class="data-card">
-                <h2 class="text-xl font-semibold mb-3 text-gray-700">2. 預計刨除後高程資料</h2>
-                <textarea id="planedData" class="w-full h-48 p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition" placeholder="請在此貼上刨除後資料..."></textarea>
+                <input type="text" id="section2Name" class="input-title mb-3" value="斷面 2 (e.g. 刨除後)">
+                <textarea id="planedData" class="w-full h-48 p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition" placeholder="格式: 里程 高程1 高程2... 支距1 支距2..."></textarea>
             </div>
         </div>
 
@@ -52,7 +69,7 @@
             <button id="processButton" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg shadow-lg transition-transform transform hover:scale-105">
                 處理資料並分析
             </button>
-            <button id="shareButton" class="bg-teal-500 hover:bg-teal-600 text-white font-bold py-3 px-6 rounded-lg shadow-lg transition-transform transform hover:scale-105">
+            <button id="shareButton" class="bg-teal-500 hover:bg-teal-600 text-white font-bold py-3 px-6 rounded-lg shadow-lg transition-transform transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed">
                 分享結果
             </button>
         </div>
@@ -67,6 +84,12 @@
                     <h3 class="text-2xl font-bold text-gray-800 mb-4 md:mb-0">A. 單一斷面分析</h3>
                     <div class="flex items-center space-x-3"><label for="mileageSelector" class="text-lg font-medium">選擇里程:</label><select id="mileageSelector" class="p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"></select></div>
                 </div>
+                
+                <div class="bg-gray-50 p-4 rounded-lg mb-6 text-center">
+                    <h4 class="text-xl font-semibold text-gray-700">斷面面積計算結果</h4>
+                    <div id="areaDisplay" class="text-lg mt-2">--</div>
+                </div>
+
                 <div id="chartContainer" class="chart-container mb-8"><canvas id="elevationChart"></canvas></div>
                 <div><h4 class="text-xl font-semibold mb-4 text-gray-700">高程差詳細資料</h4><div id="differenceTableContainer" class="overflow-x-auto"></div></div>
             </div>
@@ -97,6 +120,8 @@
 
     <script>
         // 頁面元素
+        const section1NameEl = document.getElementById('section1Name');
+        const section2NameEl = document.getElementById('section2Name');
         const originalDataEl = document.getElementById('originalData');
         const planedDataEl = document.getElementById('planedData');
         const customOffsetsEl = document.getElementById('customOffsets');
@@ -111,9 +136,9 @@
         let originalDataMap = {};
         let planedDataMap = {};
         let allSortedMileages = [];
+        const JSON_BIN_SERVICE = 'https://api.npoint.io/';
 
         // --- 核心功能 ---
-
         function parseData(dataString) {
             const dataMap = {};
             const lines = dataString.trim().split('\n');
@@ -142,7 +167,6 @@
                 const mileageSet = new Set([...Object.keys(originalDataMap), ...Object.keys(planedDataMap)]);
                 allSortedMileages = Array.from(mileageSet).map(Number).sort((a, b) => b - a);
                 if (allSortedMileages.length === 0) throw new Error("未解析出有效的里程資料。");
-
                 const selector = document.getElementById('mileageSelector');
                 selector.innerHTML = '';
                 allSortedMileages.forEach(mileage => {
@@ -164,16 +188,17 @@
         function updateIndividualDisplay() {
             const selectedMileage = document.getElementById('mileageSelector').value;
             if (!selectedMileage) return;
-            const originalPoints = originalDataMap[selectedMileage] || [];
-            const planedPoints = planedDataMap[selectedMileage] || [];
-            updateChart(selectedMileage, originalPoints, planedPoints);
-            calculateAndDisplayIndividualDifferences(originalPoints, planedPoints);
+            const points1 = originalDataMap[selectedMileage] || [];
+            const points2 = planedDataMap[selectedMileage] || [];
+            updateChart(selectedMileage, points1, points2);
+            calculateAndDisplayIndividualDifferences(points1, points2);
+            calculateAndDisplayArea(points1, points2);
         }
 
-        function updateChart(mileage, originalData, planedData) {
+        function updateChart(mileage, points1, points2) {
             const ctx = document.getElementById('elevationChart').getContext('2d');
             if (elevationChart) elevationChart.destroy();
-            elevationChart = new Chart(ctx, { type: 'line', data: { datasets: [{ label: '原有高程', data: originalData, borderColor: 'rgb(59, 130, 246)', tension: 0.1, fill: false, pointRadius: 5 }, { label: '刨除後高程', data: planedData, borderColor: 'rgb(139, 92, 246)', tension: 0.1, fill: false, pointRadius: 5 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { title: { display: true, text: `里程 ${mileage} 斷面圖`, font: { size: 18 } } }, scales: { x: { type: 'linear', title: { display: true, text: '支距 (m)' } }, y: { title: { display: true, text: '高程 (m)' } } } } });
+            elevationChart = new Chart(ctx, { type: 'line', data: { datasets: [{ label: section1NameEl.value, data: points1, borderColor: 'rgb(59, 130, 246)', tension: 0.1, fill: false, pointRadius: 5 }, { label: section2NameEl.value, data: points2, borderColor: 'rgb(139, 92, 246)', tension: 0.1, fill: false, pointRadius: 5 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { title: { display: true, text: `里程 ${mileage} 斷面圖`, font: { size: 18 } } }, scales: { x: { type: 'linear', title: { display: true, text: '支距 (m)' } }, y: { title: { display: true, text: '高程 (m)' } } } } });
         }
 
         function interpolate(points, x) {
@@ -190,42 +215,70 @@
             return points.reduce((prev, curr) => (Math.abs(curr.x - x) < Math.abs(prev.x - x) ? curr : prev));
         }
 
-        function calculateAndDisplayIndividualDifferences(originalPoints, planedPoints) {
+        function calculateAndDisplayIndividualDifferences(points1, points2) {
             const container = document.getElementById('differenceTableContainer');
-            const allOffsets = new Set([...originalPoints.map(p => p.x), ...planedPoints.map(p => p.x)]);
+            const allOffsets = new Set([...points1.map(p => p.x), ...points2.map(p => p.x)]);
             const sortedOffsets = Array.from(allOffsets).sort((a, b) => a - b);
-            let tableHTML = `<table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">支距(m)</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">原有高程(m)</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">刨除後高程(m)</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">高程差(cm)</th></tr></thead><tbody class="bg-white divide-y divide-gray-200">`;
+            let tableHTML = `<table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">支距(m)</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">${section1NameEl.value}(m)</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">${section2NameEl.value}(m)</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">高程差(cm)</th>
+                </tr></thead><tbody class="bg-white divide-y divide-gray-200">`;
             for (const offset of sortedOffsets) {
-                const o = interpolate(originalPoints, offset);
-                const p = interpolate(planedPoints, offset);
-                let diff = (o !== null && p !== null) ? ((o - p) * 100).toFixed(1) : 'N/A';
-                tableHTML += `<tr><td class="px-6 py-4">${offset.toFixed(2)}</td><td class="px-6 py-4">${o?.toFixed(3) ?? 'N/A'}</td><td class="px-6 py-4">${p?.toFixed(3) ?? 'N/A'}</td><td class="px-6 py-4 ${parseFloat(diff) >= 0 ? 'text-red-600' : 'text-green-600'}">${diff}</td></tr>`;
+                const y1 = interpolate(points1, offset);
+                const y2 = interpolate(points2, offset);
+                let diff = (y1 !== null && y2 !== null) ? ((y1 - y2) * 100).toFixed(1) : 'N/A';
+                tableHTML += `<tr><td class="px-6 py-4">${offset.toFixed(2)}</td><td class="px-6 py-4">${y1?.toFixed(3) ?? 'N/A'}</td><td class="px-6 py-4">${y2?.toFixed(3) ?? 'N/A'}</td><td class="px-6 py-4 ${parseFloat(diff) >= 0 ? 'text-red-600' : 'text-green-600'}">${diff}</td></tr>`;
             }
             container.innerHTML = tableHTML + '</tbody></table>';
         }
         
+        function calculateAndDisplayArea(points1, points2) {
+            let cutArea = 0;
+            let fillArea = 0;
+            const allOffsets = [...new Set([...points1.map(p => p.x), ...points2.map(p => p.x)])].sort((a, b) => a - b);
+            for (let i = 0; i < allOffsets.length - 1; i++) {
+                const x1 = allOffsets[i], x2 = allOffsets[i+1];
+                const y1_start = interpolate(points1, x1), y2_start = interpolate(points2, x1);
+                const y1_end = interpolate(points1, x2), y2_end = interpolate(points2, x2);
+                if (y1_start === null || y2_start === null || y1_end === null || y2_end === null) continue;
+                const h1 = y1_start - y2_start, h2 = y1_end - y2_end, width = x2 - x1;
+                if (h1 * h2 >= 0) {
+                    const area = (h1 + h2) / 2 * width;
+                    if (area > 0) cutArea += area; else fillArea -= area;
+                } else {
+                    const m1 = (y1_end - y1_start) / width, m2 = (y2_end - y2_start) / width;
+                    const intersectX = x1 + (y2_start - y1_start) / (m1 - m2);
+                    const area1 = 0.5 * h1 * (intersectX - x1);
+                    if (area1 > 0) cutArea += area1; else fillArea -= area1;
+                    const area2 = 0.5 * h2 * (x2 - intersectX);
+                    if (area2 > 0) cutArea += area2; else fillArea -= area2;
+                }
+            }
+            document.getElementById('areaDisplay').innerHTML = `<span class="font-semibold text-red-600">挖方(Cut)面積:</span> ${cutArea.toFixed(3)} m² &nbsp;&nbsp; <span class="font-semibold text-green-600">填方(Fill)面積:</span> ${fillArea.toFixed(3)} m²`;
+        }
+
         function generateSummaryReport() {
             errorMessageDiv.textContent = '';
             const offsetsInput = customOffsetsEl.value;
             if (!offsetsInput.trim()) { errorMessageDiv.textContent = '請輸入要計算的指定支距。'; return; }
             const customOffsets = offsetsInput.trim().split(/[\s,]+/).map(Number).filter(n => !isNaN(n)).sort((a,b) => a-b);
             if (customOffsets.length === 0) { errorMessageDiv.textContent = '輸入的指定支距格式無效。'; return; }
-
             const container = document.getElementById('summaryTableContainer');
             let tableHTML = `<table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">里程</th>`;
             customOffsets.forEach(offset => { tableHTML += `<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">支距 ${offset.toFixed(2)}(cm)</th>`; });
             tableHTML += `</tr></thead><tbody class="bg-white divide-y divide-gray-200">`;
-
             for (const mileage of allSortedMileages) {
                 tableHTML += `<tr><td class="px-6 py-4 font-semibold">${mileage}</td>`;
-                const originalPoints = originalDataMap[mileage] || [];
-                const planedPoints = planedDataMap[mileage] || [];
+                const points1 = originalDataMap[mileage] || [];
+                const points2 = planedDataMap[mileage] || [];
                 for (const offset of customOffsets) {
-                    let o = interpolate(originalPoints, offset), p = interpolate(planedPoints, offset), note = '', noteOffset = null;
-                    if (o === null && originalPoints.length > 0) { const c = findClosestPoint(originalPoints, offset); o = c.y; noteOffset = c.x; }
-                    if (p === null && planedPoints.length > 0) { const c = findClosestPoint(planedPoints, offset); p = c.y; noteOffset = noteOffset || c.x; }
+                    let y1 = interpolate(points1, offset), y2 = interpolate(points2, offset), note = '', noteOffset = null;
+                    if (y1 === null && points1.length > 0) { const c = findClosestPoint(points1, offset); y1 = c.y; noteOffset = c.x; }
+                    if (y2 === null && points2.length > 0) { const c = findClosestPoint(points2, offset); y2 = c.y; noteOffset = noteOffset || c.x; }
                     if(noteOffset !== null) note = `<span class="text-xs text-gray-400 ml-1">(近${noteOffset.toFixed(2)})</span>`;
-                    const diff = (o !== null && p !== null) ? ((o - p) * 100).toFixed(1) : 'N/A';
+                    const diff = (y1 !== null && y2 !== null) ? ((y1 - y2) * 100).toFixed(1) : 'N/A';
                     const content = diff === 'N/A' ? 'N/A' : diff + note;
                     tableHTML += `<td class="px-6 py-4 ${parseFloat(diff) >= 0 ? 'text-red-600' : 'text-green-600'}">${content}</td>`;
                 }
@@ -234,70 +287,74 @@
             container.innerHTML = tableHTML + '</tbody></table>';
         }
 
-        // --- 分享功能 ---
-        function generateShareLink() {
+        // --- 分享功能 (NEW) ---
+        async function generateShareLink() {
+            const originalButtonText = shareButton.innerHTML;
+            shareButton.disabled = true;
+            shareButton.innerHTML = '生成中...';
+            errorMessageDiv.textContent = '';
+
             try {
                 const dataToShare = {
-                    o: originalDataEl.value,
-                    p: planedDataEl.value,
+                    n1: section1NameEl.value, n2: section2NameEl.value,
+                    d1: originalDataEl.value, d2: planedDataEl.value,
                     c: customOffsetsEl.value
                 };
-                const jsonString = JSON.stringify(dataToShare);
-                // 使用 pako 進行壓縮, to: 'string' 是為了相容 btoa
-                const compressed = pako.deflate(jsonString, { to: 'string' });
-                // 使用 Base64 編碼
-                const base64 = btoa(compressed);
-                // 確保 URL 安全
-                const urlSafeBase64 = encodeURIComponent(base64);
+
+                const response = await fetch(JSON_BIN_SERVICE, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(dataToShare)
+                });
+
+                if (!response.ok) throw new Error(`雲端服務錯誤: ${response.statusText}`);
                 
-                const shareUrl = `${window.location.protocol}//${window.location.host}${window.location.pathname}?data=${urlSafeBase64}`;
+                const result = await response.json();
+                const binId = result.id.split('/').pop();
                 
+                const shareUrl = `${window.location.protocol}//${window.location.host}${window.location.pathname}?bin=${binId}`;
                 document.getElementById('shareLinkInput').value = shareUrl;
                 openShareModal();
 
             } catch (e) {
-                errorMessageDiv.textContent = '生成分享連結時發生錯誤: ' + e.message;
+                errorMessageDiv.textContent = '生成分享連結失敗: ' + e.message;
+            } finally {
+                shareButton.disabled = false;
+                shareButton.innerHTML = originalButtonText;
             }
         }
 
-        function loadDataFromUrl() {
+        async function loadDataFromUrl() {
             const urlParams = new URLSearchParams(window.location.search);
-            const dataParam = urlParams.get('data');
-            if (dataParam) {
+            const binId = urlParams.get('bin');
+            if (binId) {
                 try {
-                    const base64 = decodeURIComponent(dataParam);
-                    const compressed = atob(base64);
-                    // 使用 pako 解壓縮
-                    const jsonString = pako.inflate(compressed, { to: 'string' });
-                    const data = JSON.parse(jsonString);
+                    const response = await fetch(`${JSON_BIN_SERVICE}${binId}`);
+                    if (!response.ok) throw new Error('無法從雲端讀取資料。');
+                    const data = await response.json();
 
-                    if (data.o) originalDataEl.value = data.o;
-                    if (data.p) planedDataEl.value = data.p;
+                    if (data.n1) section1NameEl.value = data.n1;
+                    if (data.n2) section2NameEl.value = data.n2;
+                    if (data.d1) originalDataEl.value = data.d1;
+                    if (data.d2) planedDataEl.value = data.d2;
                     if (data.c) customOffsetsEl.value = data.c;
                     
-                    // 自動執行分析
                     processButton.click();
-                    if (data.c) {
-                       // 延遲一點執行總表生成，確保資料已完全處理
-                       setTimeout(() => summaryButton.click(), 100);
-                    }
+                    if (data.c) setTimeout(() => summaryButton.click(), 100);
 
                 } catch (e) {
-                    errorMessageDiv.textContent = '從連結讀取資料時發生錯誤。連結可能已損毀。';
-                    loadDefaultData(); // 如果連結錯誤，載入預設資料
+                    errorMessageDiv.textContent = '讀取分享資料時發生錯誤: ' + e.message;
+                    loadDefaultData();
                 }
             } else {
-                 loadDefaultData(); // 如果沒有連結參數，載入預設資料
+                 loadDefaultData();
             }
         }
         
         function openShareModal() {
             const modal = document.getElementById('shareModal');
             modal.classList.remove('hidden');
-            setTimeout(() => {
-                modal.classList.remove('opacity-0');
-                modal.querySelector('div').classList.remove('scale-95');
-            }, 10);
+            setTimeout(() => { modal.classList.remove('opacity-0'); modal.querySelector('div').classList.remove('scale-95'); }, 10);
         }
 
         function closeShareModal() {
@@ -311,25 +368,24 @@
             const input = document.getElementById('shareLinkInput');
             input.select();
             input.setSelectionRange(0, 99999); 
-            try {
-                // 使用 Clipboard API (新方法)
-                navigator.clipboard.writeText(input.value).then(() => {
-                    alert('連結已複製到剪貼簿！');
-                }).catch(err => {
-                    // 如果失敗，使用舊方法
+            navigator.clipboard.writeText(input.value).then(() => {
+                alert('連結已複製到剪貼簿！');
+            }).catch(err => {
+                try {
                     document.execCommand('copy');
                     alert('連結已複製到剪貼簿！');
-                });
-            } catch (err) {
-                 // 如果兩種方法都失敗
-                 alert('複製失敗，請手動複製。');
-            }
+                } catch (e) {
+                    alert('複製失敗，請手動複製。');
+                }
+            });
         }
         
         // --- 預設資料與事件綁定 ---
         function loadDefaultData() {
-            originalDataEl.value = `770	3.170	3.115	3.085	3.030	2.985	-4.29	-2.00	0.00	2.00	4.29\n760	3.105	3.125	3.150	3.120	3.095	-4.28	-2.00	0.00	2.00	4.33\n750	3.165	3.170	3.190	3.180	3.135	-4.28	-2.00	0.00	2.00	4.40\n740	3.190	3.230	3.230	3.220	3.130	-4.33	-2.00	0.00	2.00	4.30\n730	3.165	3.245	3.245	3.230	3.175	-4.30	-2.00	0.00	2.00	4.31`;
-            planedDataEl.value = `770	3.125	3.125	2.985	-4.29	0.00	4.29\n760	3.076	3.119	3.076	-4.28	0.00	4.33\n750	3.089	3.132	3.088	-4.28	0.00	4.40\n740	3.120	3.163	3.120	-4.33	0.00	4.30\n730	3.129	3.215	3.172	-4.30	0.00	4.31`;
+            section1NameEl.value = 'AC道路的原有高程';
+            section2NameEl.value = '預計刨除後之高程';
+            originalDataEl.value = `770	3.170	3.115	3.085	3.030	2.985	-4.29	-2.00	0.00	2.00	4.29\n760	3.105	3.125	3.150	3.120	3.095	-4.28	-2.00	0.00	2.00	4.33\n750	3.165	3.170	3.190	3.180	3.135	-4.28	-2.00	0.00	2.00	4.40`;
+            planedDataEl.value = `770	3.125	3.125	2.985	-4.29	0.00	4.29\n760	3.076	3.119	3.076	-4.28	0.00	4.33\n750	3.089	3.132	3.088	-4.28	0.00	4.40`;
             customOffsetsEl.value = "-4.2 -2.8 -1.4 0 1.4 2.8 4.2";
         }
         
