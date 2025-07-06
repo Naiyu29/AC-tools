@@ -47,6 +47,20 @@
         .chevron-icon {
             transition: transform 0.3s;
         }
+        /* Custom radio button styles */
+        .radio-label {
+            display: inline-block;
+            background-color: #e5e7eb;
+            padding: 0.5rem 1rem;
+            border-radius: 9999px;
+            cursor: pointer;
+            transition: background-color 0.2s, color 0.2s;
+            color: #4b5563;
+        }
+        input[type="radio"]:checked + .radio-label {
+            background-color: #3b82f6;
+            color: white;
+        }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800">
@@ -67,6 +81,7 @@
                 <ol class="list-decimal list-inside space-y-2">
                     <li><strong>輸入/匯入資料</strong>: 可手動貼上資料至下方三個斷面區塊，或點擊「匯入資料」選擇先前下載的 <code>.json</code> 檔案。</li>
                     <li><strong>分析計算</strong>: 點擊「處理資料並分析」按鈕，程式將自動計算並顯示下方的所有分析報告。</li>
+                    <li><strong>選擇分析對象</strong>: 在報告區塊中，您可以選擇要比較哪兩個斷面，相關的面積、體積與高程差分析將會自動更新。</li>
                     <li><strong>查看報告</strong>: 各分析報告區塊的標題列皆可點擊以展開或收合內容，方便聚焦查閱。</li>
                     <li><strong>分享結果</strong>: 點擊「分享結果」按鈕。若資料量不大，會產生分享連結；若資料量過大，則会引導您下載資料檔，確保分享穩定可靠。</li>
                 </ol>
@@ -79,12 +94,12 @@
                 <input type="text" id="section1Name" class="input-title mb-3" value="原地面">
                 <textarea id="section1Data" class="w-full h-48 p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition" placeholder="格式: 里程 ... 高程... 支距..."></textarea>
             </div>
-            <div class="data-card">
-                <input type="text" id="section2Name" class="input-title mb-3" value="舖築後">
+             <div class="data-card">
+                <input type="text" id="section2Name" class="input-title mb-3" value="刨除後">
                 <textarea id="section2Data" class="w-full h-48 p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-red-500 focus:border-red-500 transition" placeholder="格式: 里程 高程... 支距..."></textarea>
             </div>
             <div class="data-card">
-                <input type="text" id="section3Name" class="input-title extra mb-3" value="額外斷面">
+                <input type="text" id="section3Name" class="input-title extra mb-3" value="舖築後">
                 <textarea id="section3Data" class="w-full h-48 p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-green-500 transition" placeholder="格式: 里程 高程... 支距... (選填)"></textarea>
             </div>
         </div>
@@ -110,7 +125,8 @@
                 <div class="collapsible-header flex justify-between items-center border-b pb-4 mb-6"><h3 class="text-2xl font-bold text-gray-800">斷面分析</h3><svg class="chevron-icon w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg></div>
                 <div class="collapsible-content hidden">
                     <div class="flex items-center space-x-3 mb-6"><label for="mileageSelector" class="text-lg font-medium">選擇里程:</label><select id="mileageSelector" class="p-2 border border-gray-300 rounded-md"></select></div>
-                    <div class="bg-gray-50 p-4 rounded-lg mb-6 text-center"><h4 class="text-xl font-semibold text-gray-700">斷面面積 (斷面1 vs 斷面2)</h4><div id="areaDisplay" class="text-lg mt-2">--</div></div>
+                    <div id="analysis-selector-1" class="mb-6"></div>
+                    <div class="bg-gray-50 p-4 rounded-lg mb-6 text-center"><h4 id="area-title" class="text-xl font-semibold text-gray-700">斷面面積</h4><div id="areaDisplay" class="text-lg mt-2">--</div></div>
                     <div id="chartContainer" class="chart-container mb-8"><canvas id="elevationChart"></canvas></div>
                     <div><h4 class="text-xl font-semibold mb-4">高程差詳細資料</h4><div id="differenceTableContainer" class="overflow-x-auto"></div></div>
                 </div>
@@ -132,8 +148,9 @@
             <div id="volume-summary-card" class="data-card hidden">
                  <div class="collapsible-header flex justify-between items-center border-b pb-4 mb-6"><h3 class="text-2xl font-bold text-gray-800">總土方量與斷面積摘要</h3><svg class="chevron-icon w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg></div>
                 <div class="collapsible-content hidden">
-                    <div class="bg-gray-50 p-6 rounded-lg mb-6 text-center"><h4 class="text-xl font-semibold">總土方量 (斷面1 vs 斷面2)</h4><div id="totalVolumeDisplay" class="text-2xl mt-2 font-bold">--</div></div>
-                    <div><h4 class="text-xl font-semibold mb-4">各斷面積列表 (斷面1 vs 斷面2)</h4><div id="areaTableContainer" class="overflow-x-auto"></div></div>
+                    <div id="analysis-selector-2" class="mb-6"></div>
+                    <div class="bg-gray-50 p-6 rounded-lg mb-6 text-center"><h4 id="volume-title" class="text-xl font-semibold">總土方量</h4><div id="totalVolumeDisplay" class="text-2xl mt-2 font-bold">--</div></div>
+                    <div><h4 id="area-table-title" class="text-xl font-semibold mb-4">各斷面積列表</h4><div id="areaTableContainer" class="overflow-x-auto"></div></div>
                 </div>
             </div>
         </div>
@@ -146,13 +163,14 @@
     </div>
 
     <footer class="text-center text-sm text-gray-500 py-8 px-4">
-        <p id="footer-timestamp">此程式最後於 2025年7月7日 00:48 完成第22次的修改。</p>
-        <p class="mt-1">此工具從解決一個個人的工程計算問題開始，逐步發展至今。</p>
-        <p class="mt-1">從最初的斷面繪圖，到後來加入面積、土方量計算，並建構出更穩定的分享機制，這是一段不斷學習與解決問題的過程。希望這個持續演進的小工具，能為您的工作帶來一些便利。</p>
+        <p id="footer-timestamp">此程式最後於 2025年7月7日 01:31 完成第24次的修改。</p>
+        <p class="mt-1">從最初的斷面繪圖，到後來加入面積、土方量計算，並建構出更穩定的分享機制，這是一段不斷學習與解決問題的過程。</p>
+        <p class="mt-1">希望這個持續演進的小工具，能為您的工作帶來一些便利。</p>
     </footer>
 
     <script>
         let charts = {}, dataMap1 = {}, dataMap2 = {}, dataMap3 = {}, allSortedMileages = [];
+        let analysisPair = { a: 1, b: 2 }; // Default comparison
         const URL_LENGTH_LIMIT = 4000;
 
         function parseData(dataString) {
@@ -209,9 +227,8 @@
                 allSortedMileages.forEach(mileage => selector.add(new Option(mileage, mileage)));
                 document.querySelectorAll('#results-container > .data-card').forEach(card => card.classList.remove('hidden'));
                 
-                calculateAndDisplayOverallSummary();
-                displayAllMileageCharts();
-                updateIndividualDisplay();
+                renderAnalysisSelectors();
+                runAllAnalyses();
 
             } catch (error) {
                  document.getElementById('error-message').textContent = `錯誤: ${error.message}`;
@@ -219,13 +236,24 @@
             }
         }
         
+        function runAllAnalyses() {
+            calculateAndDisplayOverallSummary();
+            displayAllMileageCharts();
+            updateIndividualDisplay();
+        }
+
         function updateIndividualDisplay() {
             const selectedMileage = document.getElementById('mileageSelector').value;
             if (!selectedMileage) return;
             const p1 = dataMap1[selectedMileage] || [], p2 = dataMap2[selectedMileage] || [], p3 = dataMap3[selectedMileage] || [];
             createOrUpdateChart('mainChart', document.getElementById('elevationChart'), selectedMileage, p1, p2, p3);
+            
+            const dataMaps = { 1: p1, 2: p2, 3: p3 };
+            const selectedP1 = dataMaps[analysisPair.a];
+            const selectedP2 = dataMaps[analysisPair.b];
+
             calculateAndDisplayIndividualDifferences(p1, p2, p3);
-            const areas = calculateSectionArea(p1, p2);
+            const areas = calculateSectionArea(selectedP1, selectedP2);
             document.getElementById('areaDisplay').innerHTML = `<span class="font-semibold text-red-600">挖方(Cut):</span> ${areas.cutArea.toFixed(3)} m² &nbsp;&nbsp; <span class="font-semibold text-green-600">填方(Fill):</span> ${areas.fillArea.toFixed(3)} m²`;
         }
         
@@ -278,23 +306,23 @@
                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">${n1}(m)</th>
                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">${n2}(m)</th>
                 ${isSection3Active ? `<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">${n3}(m)</th>` : ''}
-                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">差(1-2)(cm)</th>
-                ${isSection3Active ? `<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">差(1-3)(cm)</th>` : ''}
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">差(${document.getElementById(`section${analysisPair.a}Name`).value} - ${document.getElementById(`section${analysisPair.b}Name`).value})(cm)</th>
                 </tr></thead>`;
 
             let tableBody = `<tbody class="bg-white divide-y divide-gray-200">`;
             for (const offset of sortedOffsets) {
                 const y1 = interpolate(p1, offset), y2 = interpolate(p2, offset), y3 = isSection3Active ? interpolate(p3, offset) : null;
-                let diff12 = (y1 !== null && y2 !== null) ? ((y1 - y2) * 100).toFixed(1) : 'N/A';
-                let diff13 = (isSection3Active && y1 !== null && y3 !== null) ? ((y1 - y3) * 100).toFixed(1) : 'N/A';
+                const dataMaps = {1: y1, 2: y2, 3: y3};
+                const val1 = dataMaps[analysisPair.a];
+                const val2 = dataMaps[analysisPair.b];
+                let diff = (val1 !== null && val2 !== null) ? ((val1 - val2) * 100).toFixed(1) : 'N/A';
                 
                 tableBody += `<tr>
                     <td class="px-4 py-4">${offset.toFixed(2)}</td>
                     <td class="px-4 py-4">${y1?.toFixed(3)??'N/A'}</td>
                     <td class="px-4 py-4">${y2?.toFixed(3)??'N/A'}</td>
                     ${isSection3Active ? `<td class="px-4 py-4">${y3?.toFixed(3)??'N/A'}</td>` : ''}
-                    <td class="px-4 py-4 ${parseFloat(diff12)>=0?'text-red-600':'text-green-600'}">${diff12}</td>
-                    ${isSection3Active ? `<td class="px-4 py-4 ${parseFloat(diff13)>=0?'text-red-600':'text-green-600'}">${diff13}</td>` : ''}
+                    <td class="px-4 py-4 ${parseFloat(diff)>=0?'text-red-600':'text-green-600'}">${diff}</td>
                 </tr>`;
             }
             tableBody += `</tbody>`;
@@ -323,12 +351,25 @@
 
         function calculateAndDisplayOverallSummary() {
             let totalCut = 0, totalFill = 0;
-            const areas = allSortedMileages.map(m => ({ mileage: parseFloat(m), ...calculateSectionArea(dataMap1[m]||[], dataMap2[m]||[]) }));
+            const dataMaps = { 1: dataMap1, 2: dataMap2, 3: dataMap3 };
+            const selectedMap1 = dataMaps[analysisPair.a];
+            const selectedMap2 = dataMaps[analysisPair.b];
+
+            const areas = allSortedMileages.map(m => ({ mileage: parseFloat(m), ...calculateSectionArea(selectedMap1[m]||[], selectedMap2[m]||[]) }));
             for (let i = 0; i < areas.length - 1; i++) {
                 const s1 = areas[i], s2 = areas[i+1], dist = Math.abs(s1.mileage - s2.mileage);
                 totalCut += ((s1.cutArea + s2.cutArea) / 2) * dist;
                 totalFill += ((s1.fillArea + s2.fillArea) / 2) * dist;
             }
+            
+            const n1 = document.getElementById(`section${analysisPair.a}Name`).value;
+            const n2 = document.getElementById(`section${analysisPair.b}Name`).value;
+            const titleText = `(${n1} vs ${n2})`;
+
+            document.getElementById('volume-title').textContent = `總土方量 ${titleText}`;
+            document.getElementById('area-table-title').textContent = `各斷面積列表 ${titleText}`;
+            document.getElementById('area-title').textContent = `斷面面積 ${titleText}`;
+
             document.getElementById('totalVolumeDisplay').innerHTML = `<span class="font-semibold text-red-600">總挖方量:</span> ${totalCut.toFixed(3)} m³ &nbsp;&nbsp; <span class="font-semibold text-green-600">總填方量:</span> ${totalFill.toFixed(3)} m³`;
             const areaContainer = document.getElementById('areaTableContainer');
             let table = `<table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr><th class="px-6 py-3 text-left text-xs text-gray-500 uppercase">里程</th><th class="px-6 py-3 text-left text-xs text-gray-500 uppercase">挖方(m²)</th><th class="px-6 py-3 text-left text-xs text-gray-500 uppercase">填方(m²)</th></tr></thead><tbody class="bg-white divide-y divide-gray-200">`;
@@ -341,13 +382,18 @@
             if (!offsetsInput.trim()) { alert('請輸入指定支距。'); return; }
             const customOffsets = offsetsInput.trim().split(/[\s,]+/).map(Number).filter(n => !isNaN(n)).sort((a,b) => a-b);
             if (customOffsets.length === 0) { alert('指定支距格式無效。'); return; }
+            
+            const dataMaps = { 1: dataMap1, 2: dataMap2, 3: dataMap3 };
+            const selectedMap1 = dataMaps[analysisPair.a];
+            const selectedMap2 = dataMaps[analysisPair.b];
+            
             const container = document.getElementById('summaryTableContainer');
             let table = `<table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr><th class="px-6 py-3 text-left text-xs text-gray-500 uppercase">里程</th>`;
             customOffsets.forEach(o => { table += `<th class="px-6 py-3 text-left text-xs text-gray-500 uppercase">支距 ${o.toFixed(2)}(cm)</th>`; });
             table += `</tr></thead><tbody class="bg-white divide-y divide-gray-200">`;
             allSortedMileages.forEach(m => {
                 table += `<tr><td class="px-6 py-4 font-semibold">${m}</td>`;
-                const p1 = dataMap1[m]||[], p2 = dataMap2[m]||[];
+                const p1 = selectedMap1[m]||[], p2 = selectedMap2[m]||[];
                 customOffsets.forEach(o => {
                     let y1 = interpolate(p1, o), y2 = interpolate(p2, o), note = '', nO = null;
                     if (y1 === null && p1.length > 0) { const c = findClosestPoint(p1, o); y1 = c.y; nO = c.x; }
@@ -365,7 +411,8 @@
             return {
                 n1: document.getElementById('section1Name').value, n2: document.getElementById('section2Name').value, n3: document.getElementById('section3Name').value,
                 d1: document.getElementById('section1Data').value, d2: document.getElementById('section2Data').value, d3: document.getElementById('section3Data').value,
-                c: document.getElementById('customOffsets').value
+                c: document.getElementById('customOffsets').value,
+                ap: analysisPair
             };
         }
 
@@ -433,6 +480,7 @@
                     if (data.d2) document.getElementById('section2Data').value = data.d2;
                     if (data.d3) document.getElementById('section3Data').value = data.d3;
                     if (data.c) document.getElementById('customOffsets').value = data.c;
+                    if (data.ap) analysisPair = data.ap;
                     document.getElementById('processButton').click();
                     if (data.c) setTimeout(() => document.getElementById('summaryButton').click(), 100);
                 } catch (err) {
@@ -456,6 +504,7 @@
                     if (data.d2) document.getElementById('section2Data').value = data.d2;
                     if (data.d3) document.getElementById('section3Data').value = data.d3;
                     if (data.c) document.getElementById('customOffsets').value = data.c;
+                    if (data.ap) analysisPair = data.ap;
                     document.getElementById('processButton').click();
                     if (data.c) setTimeout(() => document.getElementById('summaryButton').click(), 100);
                 } catch (e) {
@@ -498,10 +547,47 @@
             });
         }
         
+        function renderAnalysisSelectors() {
+            const n1 = document.getElementById('section1Name').value;
+            const n2 = document.getElementById('section2Name').value;
+            const n3 = document.getElementById('section3Name').value;
+            const hasS3 = document.getElementById('section3Data').value.trim() !== '';
+
+            let selectorHTML = `<div class="flex flex-wrap gap-4 justify-center">`;
+            selectorHTML += `
+                <div>
+                    <input type="radio" name="analysisPair" id="pair12" value="1-2" class="hidden" ${analysisPair.a === 1 && analysisPair.b === 2 ? 'checked' : ''}>
+                    <label for="pair12" class="radio-label">${n1} vs ${n2}</label>
+                </div>`;
+            if (hasS3) {
+                 selectorHTML += `
+                <div>
+                    <input type="radio" name="analysisPair" id="pair13" value="1-3" class="hidden" ${analysisPair.a === 1 && analysisPair.b === 3 ? 'checked' : ''}>
+                    <label for="pair13" class="radio-label">${n1} vs ${n3}</label>
+                </div>
+                <div>
+                    <input type="radio" name="analysisPair" id="pair23" value="2-3" class="hidden" ${analysisPair.a === 2 && analysisPair.b === 3 ? 'checked' : ''}>
+                    <label for="pair23" class="radio-label">${n2} vs ${n3}</label>
+                </div>`;
+            }
+            selectorHTML += `</div>`;
+            
+            document.getElementById('analysis-selector-1').innerHTML = selectorHTML;
+            document.getElementById('analysis-selector-2').innerHTML = selectorHTML;
+
+            document.querySelectorAll('input[name="analysisPair"]').forEach(radio => {
+                radio.addEventListener('change', (e) => {
+                    const [a, b] = e.target.value.split('-').map(Number);
+                    analysisPair = { a, b };
+                    runAllAnalyses();
+                });
+            });
+        }
+
         function loadDefaultData() {
             document.getElementById('section1Name').value = '原地面';
-            document.getElementById('section2Name').value = '舖築後';
-            document.getElementById('section3Name').value = '額外斷面';
+            document.getElementById('section2Name').value = '刨除後';
+            document.getElementById('section3Name').value = '舖築後';
             document.getElementById('section1Data').value = `0			19.813	19.950	20.000	19.985	19.955				-5.1	-2.55	0	2.45	5.1	
 10			18.748	18.813	18.853	18.807	18.780				-5.04	-2.52	0	2.48	5.04	
 20			17.791	17.859	17.914	17.904	17.879				-5.02	-2.51	0	2.49	5.02	
@@ -552,7 +638,57 @@
 470	4.742	4.837	4.937	4.977	4.982	4.957	4.940		-4.13	-3.37	-3.33	-0.79	0	4.09	4.13	
 480	4.768	4.682	4.782	4.827	4.842	4.829	4.812		-4.15	-3.35	-3.35	-0.81	0	4.09	4.15	
 490		4.668	4.594	4.644	4.644	4.591	4.586				-5.13	-2.23	0	0.17	5.11	5.13`;
-            document.getElementById('section2Data').value = `0	19.883	20.08	19.965	-5.100	0.000	5.100
+            document.getElementById('section2Data').value = `0	19.813	20.010	19.895	-5.100	0.000	5.100
+10	18.759	18.883	18.748	-5.040	0.000	5.040
+20	17.802	17.944	17.847	-5.020	0.000	5.020
+30	16.980	17.179	17.117	-5.010	0.000	5.010
+40	16.373	16.529	16.434	-5.000	0.000	5.000
+50	15.817	15.999	15.909	-5.020	0.000	5.020
+60	15.308	15.458	15.384	-5.000	0.000	5.000
+70	14.814	14.907	14.860	-4.950	0.000	4.950
+80	14.321	14.378	14.378	-4.950	0.000	4.950
+90	13.832	13.890	13.897	-4.950	0.000	4.950
+100	13.363	13.411	13.416	-4.950	0.000	4.950
+110	12.863	12.922	12.935	-4.900	0.000	4.900
+120	12.375	12.473	12.488	-4.850	0.000	4.850
+130	11.893	11.948	12.028	-4.900	0.000	4.900
+140	11.388	11.407	11.377	-4.750	0.000	4.750
+150	10.708	10.792	10.732	-4.770	0.000	4.770
+160	10.138	10.217	10.135	-4.890	0.000	4.890
+170	9.578	9.632	9.539	-4.840	0.000	4.840
+180	8.998	9.077	8.970	-4.850	0.000	4.850
+190	8.559	8.554	8.475	-4.820	0.000	4.820
+200	8.174	8.194	8.182	-4.800	0.000	4.800
+210	7.767	8.043	7.939	-4.120	0.000	4.120
+220	7.744	7.882	7.771	-4.000	0.000	4.000
+230	7.574	7.721	7.609	-4.020	0.000	4.020
+240	7.415	7.549	7.437	-4.040	0.000	4.040
+250	7.324	7.441	7.356	-4.040	0.000	4.040
+260	7.233	7.348	7.286	-4.040	0.000	4.040
+270	7.148	7.245	7.206	-4.070	0.000	4.070
+280	7.061	7.141	7.111	-4.130	0.000	4.130
+290	6.893	6.992	6.914	-4.200	0.000	4.200
+300	6.728	6.843	6.730	-4.120	0.000	4.120
+310	6.566	6.684	6.575	-4.130	0.000	4.130
+320	6.409	6.552	6.420	-4.140	0.000	4.140
+330	6.279	6.412	6.300	-4.140	0.000	4.190
+340	6.228	6.340	6.302	-4.200	0.000	4.200
+350	6.188	6.258	6.221	-4.185	0.000	4.185
+360	6.122	6.175	6.165	-4.220	0.000	4.220
+370	6.047	6.093	6.089	-4.230	0.000	4.230
+380	5.963	6.011	5.973	-4.240	0.000	4.240
+390	5.883	5.928	5.838	-4.230	0.000	4.230
+400	5.731	5.801	5.708	-4.210	0.000	4.210
+410	5.558	5.674	5.588	-4.215	0.000	4.215
+420	5.396	5.542	5.412	-4.200	0.000	4.200
+430	5.271	5.420	5.280	-4.160	0.000	4.160
+440	5.152	5.293	5.207	-4.150	0.000	4.150
+450	5.021	5.166	5.086	-4.150	0.000	4.150
+460	4.935	5.039	4.977	-4.150	0.000	4.150
+470	4.711	4.912	4.880	-4.130	0.000	4.130
+480	4.698	4.783	4.752	-4.150	0.000	4.150
+490	4.598	4.654	4.526	-5.130	0.000	5.130`;
+            document.getElementById('section3Data').value = `0	19.883	20.08	19.965	-5.100	0.000	5.100
 10	18.829	18.953	18.818	-5.040	0.000	5.040
 20	17.872	18.014	17.917	-5.020	0.000	5.020
 30	17.05	17.249	17.187	-5.010	0.000	5.010
@@ -602,7 +738,6 @@
 470	4.781	4.982	4.95	-4.130	0.000	4.130
 480	4.768	4.853	4.822	-4.150	0.000	4.150
 490	4.668	4.724	4.596	-5.130	0.000	5.130`;
-            document.getElementById('section3Data').value = ``;
             document.getElementById('customOffsets').value = "-4.2 -2.8 -1.4 0 1.4 2.8 4.2";
         }
         
