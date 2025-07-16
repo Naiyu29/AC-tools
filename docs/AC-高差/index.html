@@ -81,7 +81,7 @@
                 <ol class="list-decimal list-inside space-y-2">
                     <li><strong>輸入/匯入資料</strong>: 可手動貼上資料至下方三個斷面區塊，或點擊「匯入資料」選擇先前下載的 <code>.json</code> 檔案。</li>
                     <li><strong>分析計算</strong>: 點擊「處理資料並分析」按鈕，程式將自動計算並顯示下方的所有分析報告。</li>
-                    <li><strong>選擇分析對象</strong>: 在報告區塊中，您可以選擇要比較哪兩個斷面，相關的面積、體積與高程差分析將會自動更新。</li>
+                    <li><strong>選擇分析對象</strong>: 在「個別斷面分析」報告中，您可以選擇要比較哪兩個斷面，該區塊的「高程差詳細資料」將會自動更新。</li>
                     <li><strong>查看報告</strong>: 各分析報告區塊的標題列皆可點擊以展開或收合內容，方便聚焦查閱。</li>
                     <li><strong>分享結果</strong>: 點擊「分享結果」按鈕。若資料量不大，會產生分享連結；若資料量過大，則会引導您下載資料檔，確保分享穩定可靠。</li>
                 </ol>
@@ -89,18 +89,24 @@
         </div>
 
         <!-- 資料輸入區 -->
-        <div class="space-y-6">
-            <div class="data-card">
-                <input type="text" id="section1Name" class="input-title mb-3" value="原地面">
-                <textarea id="section1Data" class="w-full h-48 p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition" placeholder="格式: 里程 ... 高程... 支距..."></textarea>
+        <div class="data-card mb-8">
+            <div class="collapsible-header flex justify-between items-center">
+                <h3 class="text-2xl font-bold text-gray-800">資料輸入區</h3>
+                <svg class="chevron-icon w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
             </div>
-             <div class="data-card">
-                <input type="text" id="section2Name" class="input-title mb-3" value="刨除後">
-                <textarea id="section2Data" class="w-full h-48 p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-red-500 focus:border-red-500 transition" placeholder="格式: 里程 高程... 支距..."></textarea>
-            </div>
-            <div class="data-card">
-                <input type="text" id="section3Name" class="input-title extra mb-3" value="舖築後">
-                <textarea id="section3Data" class="w-full h-48 p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-green-500 transition" placeholder="格式: 里程 高程... 支距... (選填)"></textarea>
+            <div class="collapsible-content mt-6 space-y-6 hidden">
+                <div class="data-card">
+                    <input type="text" id="section1Name" class="input-title mb-3" value="原地面">
+                    <textarea id="section1Data" class="w-full h-48 p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition" placeholder="格式: 里程 ... 高程... 支距..."></textarea>
+                </div>
+                 <div class="data-card">
+                    <input type="text" id="section2Name" class="input-title mb-3" value="刨除後">
+                    <textarea id="section2Data" class="w-full h-48 p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-red-500 focus:border-red-500 transition" placeholder="格式: 里程 高程... 支距..."></textarea>
+                </div>
+                <div class="data-card">
+                    <input type="text" id="section3Name" class="input-title extra mb-3" value="舖築後">
+                    <textarea id="section3Data" class="w-full h-48 p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-green-500 transition" placeholder="格式: 里程 高程... 支距... (選填)"></textarea>
+                </div>
             </div>
         </div>
 
@@ -122,13 +128,16 @@
         <!-- 結果顯示區 -->
         <div id="results-container" class="space-y-8">
             <div id="individual-results" class="data-card hidden">
-                <div class="collapsible-header flex justify-between items-center border-b pb-4 mb-6"><h3 class="text-2xl font-bold text-gray-800">斷面分析</h3><svg class="chevron-icon w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg></div>
+                <div class="collapsible-header flex justify-between items-center border-b pb-4 mb-6"><h3 class="text-2xl font-bold text-gray-800">個別斷面分析</h3><svg class="chevron-icon w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg></div>
                 <div class="collapsible-content hidden">
                     <div class="flex items-center space-x-3 mb-6"><label for="mileageSelector" class="text-lg font-medium">選擇里程:</label><select id="mileageSelector" class="p-2 border border-gray-300 rounded-md"></select></div>
-                    <div id="analysis-selector-1" class="mb-6"></div>
-                    <div class="bg-gray-50 p-4 rounded-lg mb-6 text-center"><h4 id="area-title" class="text-xl font-semibold text-gray-700">斷面面積</h4><div id="areaDisplay" class="text-lg mt-2">--</div></div>
+                    <div class="bg-gray-50 p-4 rounded-lg mb-6 text-center"><h4 class="text-xl font-semibold text-gray-700">該斷面工程量</h4><div id="areaDisplay" class="text-lg mt-2">--</div></div>
                     <div id="chartContainer" class="chart-container mb-8"><canvas id="elevationChart"></canvas></div>
-                    <div><h4 class="text-xl font-semibold mb-4">高程差詳細資料</h4><div id="differenceTableContainer" class="overflow-x-auto"></div></div>
+                    <div>
+                        <h4 class="text-xl font-semibold mb-4">高程差詳細資料</h4>
+                        <div id="analysis-selector-1" class="mb-6"></div>
+                        <div id="differenceTableContainer" class="overflow-x-auto"></div>
+                    </div>
                 </div>
             </div>
             <div id="all-mileage-card" class="data-card hidden">
@@ -146,11 +155,10 @@
                 </div>
             </div>
             <div id="volume-summary-card" class="data-card hidden">
-                 <div class="collapsible-header flex justify-between items-center border-b pb-4 mb-6"><h3 class="text-2xl font-bold text-gray-800">總土方量與斷面積摘要</h3><svg class="chevron-icon w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg></div>
+                 <div class="collapsible-header flex justify-between items-center border-b pb-4 mb-6"><h3 class="text-2xl font-bold text-gray-800">刨除量及舖築量分析</h3><svg class="chevron-icon w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg></div>
                 <div class="collapsible-content hidden">
-                    <div id="analysis-selector-2" class="mb-6"></div>
-                    <div class="bg-gray-50 p-6 rounded-lg mb-6 text-center"><h4 id="volume-title" class="text-xl font-semibold">總土方量</h4><div id="totalVolumeDisplay" class="text-2xl mt-2 font-bold">--</div></div>
-                    <div><h4 id="area-table-title" class="text-xl font-semibold mb-4">各斷面積列表</h4><div id="areaTableContainer" class="overflow-x-auto"></div></div>
+                    <div class="bg-gray-50 p-6 rounded-lg mb-6 text-center"><h4 class="text-xl font-semibold">工程總量</h4><div id="totalVolumeDisplay" class="text-2xl mt-2 font-bold">--</div></div>
+                    <div><h4 id="area-table-title" class="text-xl font-semibold mb-4">各里程刨除及舖築面積</h4><div id="areaTableContainer" class="overflow-x-auto"></div></div>
                 </div>
             </div>
         </div>
@@ -163,9 +171,9 @@
     </div>
 
     <footer class="text-center text-sm text-gray-500 py-8 px-4">
-        <p id="footer-timestamp">此程式最後於 2025年7月7日 01:31 完成第24次的修改。</p>
-        <p class="mt-1">從最初的斷面繪圖，到後來加入面積、土方量計算，並建構出更穩定的分享機制，這是一段不斷學習與解決問題的過程。</p>
-        <p class="mt-1">希望這個持續演進的小工具，能為您的工作帶來一些便利。</p>
+        <p id="footer-timestamp">此程式最後於 2025年7月7日 01:31 完成第27次的修改。</p>
+        <p class="mt-1">此工具從解決一個個人的工程計算問題開始，逐步發展至今。</p>
+        <p class="mt-1">從最初的斷面繪圖，到後來加入面積、土方量計算，並建構出更穩定的分享機制，這是一段不斷學習與解決問題的過程。希望這個持續演進的小工具，能為您的工作帶來一些便利。</p>
     </footer>
 
     <script>
@@ -248,13 +256,17 @@
             const p1 = dataMap1[selectedMileage] || [], p2 = dataMap2[selectedMileage] || [], p3 = dataMap3[selectedMileage] || [];
             createOrUpdateChart('mainChart', document.getElementById('elevationChart'), selectedMileage, p1, p2, p3);
             
-            const dataMaps = { 1: p1, 2: p2, 3: p3 };
-            const selectedP1 = dataMaps[analysisPair.a];
-            const selectedP2 = dataMaps[analysisPair.b];
-
             calculateAndDisplayIndividualDifferences(p1, p2, p3);
-            const areas = calculateSectionArea(selectedP1, selectedP2);
-            document.getElementById('areaDisplay').innerHTML = `<span class="font-semibold text-red-600">挖方(Cut):</span> ${areas.cutArea.toFixed(3)} m² &nbsp;&nbsp; <span class="font-semibold text-green-600">填方(Fill):</span> ${areas.fillArea.toFixed(3)} m²`;
+            
+            const planingArea = calculateSectionArea(p1, p2);
+            const lowerBoundary = createLowerBoundary(p1, p2);
+            const pavingArea = calculateSectionArea(lowerBoundary, p3);
+
+            let areaHTML = `<span class="font-semibold text-red-600">刨除面積:</span> ${planingArea.cutArea.toFixed(3)} m²`;
+            if (p3 && p3.length > 0) {
+                 areaHTML += `&nbsp;&nbsp; <span class="font-semibold text-green-600">舖築面積:</span> ${pavingArea.fillArea.toFixed(3)} m²`;
+            }
+            document.getElementById('areaDisplay').innerHTML = areaHTML;
         }
         
         function createOrUpdateChart(chartId, canvasEl, mileage, p1, p2, p3) {
@@ -306,23 +318,23 @@
                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">${n1}(m)</th>
                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">${n2}(m)</th>
                 ${isSection3Active ? `<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">${n3}(m)</th>` : ''}
-                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">差(${document.getElementById(`section${analysisPair.a}Name`).value} - ${document.getElementById(`section${analysisPair.b}Name`).value})(cm)</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">差(1-2)(cm)</th>
+                ${isSection3Active ? `<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">差(1-3)(cm)</th>` : ''}
                 </tr></thead>`;
 
             let tableBody = `<tbody class="bg-white divide-y divide-gray-200">`;
             for (const offset of sortedOffsets) {
                 const y1 = interpolate(p1, offset), y2 = interpolate(p2, offset), y3 = isSection3Active ? interpolate(p3, offset) : null;
-                const dataMaps = {1: y1, 2: y2, 3: y3};
-                const val1 = dataMaps[analysisPair.a];
-                const val2 = dataMaps[analysisPair.b];
-                let diff = (val1 !== null && val2 !== null) ? ((val1 - val2) * 100).toFixed(1) : 'N/A';
+                let diff12 = (y1 !== null && y2 !== null) ? ((y1 - y2) * 100).toFixed(1) : 'N/A';
+                let diff13 = (isSection3Active && y1 !== null && y3 !== null) ? ((y1 - y3) * 100).toFixed(1) : 'N/A';
                 
                 tableBody += `<tr>
                     <td class="px-4 py-4">${offset.toFixed(2)}</td>
                     <td class="px-4 py-4">${y1?.toFixed(3)??'N/A'}</td>
                     <td class="px-4 py-4">${y2?.toFixed(3)??'N/A'}</td>
                     ${isSection3Active ? `<td class="px-4 py-4">${y3?.toFixed(3)??'N/A'}</td>` : ''}
-                    <td class="px-4 py-4 ${parseFloat(diff)>=0?'text-red-600':'text-green-600'}">${diff}</td>
+                    <td class="px-4 py-4 ${parseFloat(diff12)>=0?'text-red-600':'text-green-600'}">${diff12}</td>
+                    ${isSection3Active ? `<td class="px-4 py-4 ${parseFloat(diff13)>=0?'text-red-600':'text-green-600'}">${diff13}</td>` : ''}
                 </tr>`;
             }
             tableBody += `</tbody>`;
@@ -331,6 +343,7 @@
         
         function calculateSectionArea(p1, p2) {
             let cut = 0, fill = 0;
+            if (!p1 || !p2 || p1.length === 0 || p2.length === 0) return { cutArea: 0, fillArea: 0 };
             const allOffsets = [...new Set([...p1.map(p => p.x), ...p2.map(p => p.x)])].sort((a, b) => a - b);
             for (let i = 0; i < allOffsets.length - 1; i++) {
                 const x1 = allOffsets[i], x2 = allOffsets[i+1];
@@ -349,31 +362,67 @@
             return { cutArea: cut, fillArea: fill };
         }
 
-        function calculateAndDisplayOverallSummary() {
-            let totalCut = 0, totalFill = 0;
-            const dataMaps = { 1: dataMap1, 2: dataMap2, 3: dataMap3 };
-            const selectedMap1 = dataMaps[analysisPair.a];
-            const selectedMap2 = dataMaps[analysisPair.b];
-
-            const areas = allSortedMileages.map(m => ({ mileage: parseFloat(m), ...calculateSectionArea(selectedMap1[m]||[], selectedMap2[m]||[]) }));
-            for (let i = 0; i < areas.length - 1; i++) {
-                const s1 = areas[i], s2 = areas[i+1], dist = Math.abs(s1.mileage - s2.mileage);
-                totalCut += ((s1.cutArea + s2.cutArea) / 2) * dist;
-                totalFill += ((s1.fillArea + s2.fillArea) / 2) * dist;
+        function createLowerBoundary(p1, p2) {
+            if (!p1 || p1.length === 0) return p2 || [];
+            if (!p2 || p2.length === 0) return p1 || [];
+            const lowerBoundaryPoints = [];
+            const allOffsets = [...new Set([...p1.map(p => p.x), ...p2.map(p => p.x)])].sort((a, b) => a - b);
+            for (const x of allOffsets) {
+                const y1 = interpolate(p1, x);
+                const y2 = interpolate(p2, x);
+                if (y1 !== null && y2 !== null) {
+                    lowerBoundaryPoints.push({ x: x, y: Math.min(y1, y2) });
+                } else if (y1 !== null) {
+                    lowerBoundaryPoints.push({ x: x, y: y1 });
+                } else if (y2 !== null) {
+                    lowerBoundaryPoints.push({ x: x, y: y2 });
+                }
             }
-            
-            const n1 = document.getElementById(`section${analysisPair.a}Name`).value;
-            const n2 = document.getElementById(`section${analysisPair.b}Name`).value;
-            const titleText = `(${n1} vs ${n2})`;
+            return lowerBoundaryPoints;
+        }
 
-            document.getElementById('volume-title').textContent = `總土方量 ${titleText}`;
-            document.getElementById('area-table-title').textContent = `各斷面積列表 ${titleText}`;
-            document.getElementById('area-title').textContent = `斷面面積 ${titleText}`;
+        function calculateAndDisplayOverallSummary() {
+            let planingVolume = 0;
+            let pavingVolume = 0;
+            const hasS3 = Object.keys(dataMap3).length > 0;
 
-            document.getElementById('totalVolumeDisplay').innerHTML = `<span class="font-semibold text-red-600">總挖方量:</span> ${totalCut.toFixed(3)} m³ &nbsp;&nbsp; <span class="font-semibold text-green-600">總填方量:</span> ${totalFill.toFixed(3)} m³`;
+            const planingAreas = allSortedMileages.map(m => ({ mileage: parseFloat(m), ...calculateSectionArea(dataMap1[m]||[], dataMap2[m]||[]) }));
+            for (let i = 0; i < planingAreas.length - 1; i++) {
+                const s1 = planingAreas[i], s2 = planingAreas[i+1], dist = Math.abs(s1.mileage - s2.mileage);
+                planingVolume += ((s1.cutArea + s2.cutArea) / 2) * dist;
+            }
+
+            const pavingAreas = allSortedMileages.map(m => {
+                const lowerBoundary = createLowerBoundary(dataMap1[m]||[], dataMap2[m]||[]);
+                return { mileage: parseFloat(m), ...calculateSectionArea(lowerBoundary, dataMap3[m]||[]) };
+            });
+            if (hasS3) {
+                for (let i = 0; i < pavingAreas.length - 1; i++) {
+                    const s1 = pavingAreas[i], s2 = pavingAreas[i+1], dist = Math.abs(s1.mileage - s2.mileage);
+                    pavingVolume += ((s1.fillArea + s2.fillArea) / 2) * dist;
+                }
+            }
+
+            let volumeHTML = `<span class="font-semibold text-red-600">刨除量:</span> ${planingVolume.toFixed(3)} m³`;
+            if (hasS3) {
+                volumeHTML += `&nbsp;&nbsp; <span class="font-semibold text-green-600">舖築量:</span> ${pavingVolume.toFixed(3)} m³`;
+            }
+            document.getElementById('totalVolumeDisplay').innerHTML = volumeHTML;
+
             const areaContainer = document.getElementById('areaTableContainer');
-            let table = `<table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr><th class="px-6 py-3 text-left text-xs text-gray-500 uppercase">里程</th><th class="px-6 py-3 text-left text-xs text-gray-500 uppercase">挖方(m²)</th><th class="px-6 py-3 text-left text-xs text-gray-500 uppercase">填方(m²)</th></tr></thead><tbody class="bg-white divide-y divide-gray-200">`;
-            areas.forEach(a => { table += `<tr><td class="px-6 py-4 font-semibold">${a.mileage}</td><td class="px-6 py-4 text-red-600">${a.cutArea.toFixed(3)}</td><td class="px-6 py-4 text-green-600">${a.fillArea.toFixed(3)}</td></tr>`; });
+            let table = `<table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr>
+                <th class="px-6 py-3 text-left text-xs text-gray-500 uppercase">里程</th>
+                <th class="px-6 py-3 text-left text-xs text-gray-500 uppercase">刨除面積(m²)</th>
+                ${hasS3 ? `<th class="px-6 py-3 text-left text-xs text-gray-500 uppercase">舖築面積(m²)</th>` : ''}
+                </tr></thead><tbody class="bg-white divide-y divide-gray-200">`;
+            for (let i = 0; i < allSortedMileages.length; i++) {
+                const mileage = allSortedMileages[i];
+                table += `<tr>
+                    <td class="px-6 py-4 font-semibold">${mileage}</td>
+                    <td class="px-6 py-4 text-red-600">${planingAreas[i].cutArea.toFixed(3)}</td>
+                    ${hasS3 ? `<td class="px-6 py-4 text-green-600">${pavingAreas[i].fillArea.toFixed(3)}</td>` : ''}
+                </tr>`;
+            }
             areaContainer.innerHTML = table + '</tbody></table>';
         }
 
@@ -573,7 +622,7 @@
             selectorHTML += `</div>`;
             
             document.getElementById('analysis-selector-1').innerHTML = selectorHTML;
-            document.getElementById('analysis-selector-2').innerHTML = selectorHTML;
+            // document.getElementById('analysis-selector-2').innerHTML = selectorHTML;
 
             document.querySelectorAll('input[name="analysisPair"]').forEach(radio => {
                 radio.addEventListener('change', (e) => {
