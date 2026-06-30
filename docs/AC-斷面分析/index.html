@@ -1,0 +1,1108 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>通用AC斷面分析工具</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-annotation/1.4.0/chartjs-plugin-annotation.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', 'Noto Sans TC', sans-serif; }
+        .chart-container { position: relative; height: 60vh; width: 100%; }
+        .small-chart-container { position: relative; height: 40vh; width: 100%; }
+        #thickness-chart-container { transition: height 0.5s ease-in-out; }
+        .data-card { background-color: white; padding: 1.5rem; border-radius: 0.5rem; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); }
+        .collapsible-content { transition: all 0.3s ease-in-out; }
+        .input-title { background-color: transparent; border: none; font-size: 1.25rem; font-weight: 600; color: #374151; width: 100%; padding: 0.25rem 0.5rem; margin-left: -0.5rem; border-radius: 0.25rem; }
+        .input-title:focus { outline: none; box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.5); background-color: #f9fafb; }
+        .input-title.extra { color: #6b7280; }
+        .collapsible-header { cursor: pointer; }
+        .chevron-icon { transition: transform 0.3s; }
+        .radio-label { display: inline-block; background-color: #e5e7eb; padding: 0.5rem 1rem; border-radius: 9999px; cursor: pointer; transition: background-color 0.2s, color 0.2s; color: #4b5563; }
+        input[type="radio"]:checked + .radio-label { background-color: #3b82f6; color: white; }
+        
+        /* Custom Modal Styles */
+        .modal-backdrop { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; opacity: 0; visibility: hidden; transition: opacity 0.3s, visibility 0.3s; }
+        .modal-backdrop.visible { opacity: 1; visibility: visible; }
+        .modal-content { background: white; padding: 2rem; border-radius: 0.5rem; box-shadow: 0 10px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1); width: 90%; max-width: 500px; transform: scale(0.95); transition: transform 0.3s; }
+        .modal-backdrop.visible .modal-content { transform: scale(1); }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <div class="container mx-auto p-4 md:p-8">
+        <header class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold text-gray-900">通用AC斷面分析工具</h1>
+            <p class="mt-2 text-gray-600">輸入斷面資料，計算高程差、面積與體積，並可儲存結果。</p>
+        </header>
+
+        <div id="auth-bar" class="flex flex-wrap justify-center items-center gap-3 mb-8 text-sm">
+            <span class="text-gray-400">正在連線…</span>
+        </div>
+
+        <div class="data-card mb-8">
+             <div class="collapsible-header flex justify-between items-center">
+                <h3 class="text-2xl font-bold text-gray-800">核心功能與操作</h3>
+                <svg class="chevron-icon w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+            </div>
+            <div class="collapsible-content mt-4 text-gray-600 space-y-3 hidden">
+                <ol class="list-decimal list-inside space-y-2">
+                    <li><strong>輸入/匯入資料</strong>: 可手動貼上資料至下方三個斷面區塊，或點擊「匯入資料」選擇先前儲存的 <code>.json</code> 檔案。</li>
+                    <li><strong>分析計算</strong>: 點擊「處理資料並分析」按鈕，程式將自動計算並顯示下方的所有分析報告。</li>
+                    <li><strong>儲存/匯出資料</strong>: 點擊「儲存結果」可將當前分析命名並存入雲端公開列表。點擊「匯出資料」可將輸入區的資料下載為 <code>.json</code> 檔。</li>
+                    <li><strong>管理紀錄</strong>: 雲端列表中的紀錄任何人皆可讀取、編輯名稱或刪除。</li>
+                    <li><strong>查看報告</strong>: 各分析報告區塊的標題列皆可點擊以展開或收合內容，方便聚焦查閱。</li>
+                </ol>
+            </div>
+        </div>
+
+        <div class="data-card mb-8">
+             <div class="collapsible-header flex justify-between items-center">
+                <h3 class="text-2xl font-bold text-gray-800">儲存的分析紀錄</h3>
+                <svg class="chevron-icon w-6 h-6 text-gray-600 rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+            </div>
+            <div id="saved-analyses-container" class="collapsible-content mt-4 text-gray-600 space-y-4">
+                <div class="flex items-center gap-4">
+                    <label for="sort-by" class="text-sm font-medium">排序方式:</label>
+                    <select id="sort-by" class="p-2 border border-gray-300 rounded-md text-sm">
+                        <option value="createdAt-desc">建立時間 (新到舊)</option>
+                        <option value="createdAt-asc">建立時間 (舊到新)</option>
+                        <option value="description-asc">名稱 (A-Z)</option>
+                        <option value="description-desc">名稱 (Z-A)</option>
+                    </select>
+                </div>
+                <ul id="saved-list" class="list-disc pl-5 mt-2"><li>正在載入紀錄...</li></ul>
+            </div>
+        </div>
+
+        <div class="data-card mb-8">
+            <div class="collapsible-header flex justify-between items-center">
+                <h3 class="text-2xl font-bold text-gray-800">資料輸入區</h3>
+                <svg class="chevron-icon w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+            </div>
+            <div class="collapsible-content mt-6 space-y-6 hidden">
+                <div class="data-card">
+                    <input type="text" id="section1Name" class="input-title mb-3" value="原地面">
+                    <textarea id="section1Data" class="w-full h-48 p-3 border border-gray-300 rounded-md" placeholder="格式: 里程 ... 高程... 支距..."></textarea>
+                </div>
+                 <div class="data-card">
+                    <input type="text" id="section2Name" class="input-title mb-3" value="刨除後">
+                    <div class="flex gap-4 mb-3">
+                        <div>
+                            <input type="radio" name="section2Method" id="method-manual-2" value="manual" checked class="hidden">
+                            <label for="method-manual-2" class="radio-label">手動輸入資料</label>
+                        </div>
+                        <div>
+                            <input type="radio" name="section2Method" id="method-calc-2" value="calc" class="hidden">
+                            <label for="method-calc-2" class="radio-label">依厚度計算</label>
+                        </div>
+                    </div>
+                    <div id="section2-manual-input">
+                        <textarea id="section2Data" class="w-full h-48 p-3 border border-gray-300 rounded-md" placeholder="格式: 里程 高程... 支距..."></textarea>
+                    </div>
+                    <div id="section2-calc-input" class="hidden space-y-3">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">計算基準:</label>
+                            <div class="flex gap-4">
+                                <div>
+                                    <input type="radio" name="millingBase" id="base-ground" value="ground" checked class="hidden">
+                                    <label for="base-ground" class="radio-label">從「原地面」扣除</label>
+                                </div>
+                                <div>
+                                    <input type="radio" name="millingBase" id="base-paved" value="paved" class="hidden">
+                                    <label for="base-paved" class="radio-label">從「舖築後」扣除</label>
+                                </div>
+                            </div>
+                        </div>
+                        <div>
+                            <label for="millingThickness" class="block text-sm font-medium text-gray-700 mb-1">刨除厚度 (公分):</label>
+                            <input type="number" id="millingThickness" value="5" class="w-full p-2 border border-gray-300 rounded-md">
+                        </div>
+                        <p class="mt-2 text-xs text-gray-500">說明：此處輸入的數值將會從您選擇的計算基準（原地面或舖築後）的每一點高程中減去，以自動生成「刨除後」的斷面資料。</p>
+                    </div>
+                </div>
+                <div class="data-card">
+                    <input type="text" id="section3Name" class="input-title extra mb-3" value="舖築後">
+                    <textarea id="section3Data" class="w-full h-48 p-3 border border-gray-300 rounded-md" placeholder="格式: 里程 高程... 支距... (選填)"></textarea>
+                </div>
+                <div class="flex flex-wrap justify-center items-center gap-4 pt-4">
+                    <button id="processButton" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg shadow-lg">處理並分析</button>
+                    <button id="saveButton" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg shadow-lg">儲存結果</button>
+                    <button id="exportButton" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-lg shadow-lg">匯出資料</button>
+                    <button id="importButton" class="bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 px-6 rounded-lg shadow-lg">匯入資料</button>
+                    <input type="file" id="fileInput" class="hidden" accept=".json">
+                </div>
+            </div>
+        </div>
+        
+        <div id="error-message" class="text-center text-red-500 font-medium my-4"></div>
+
+        <!-- 結果顯示區 -->
+        <div id="results-container" class="space-y-8">
+             <div id="individual-results" class="data-card hidden">
+                <div class="collapsible-header flex justify-between items-center border-b pb-4 mb-6"><h3 class="text-2xl font-bold text-gray-800">個別斷面分析</h3><svg class="chevron-icon w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg></div>
+                <div class="collapsible-content hidden">
+                    <div class="flex items-center space-x-3 mb-6"><label for="mileageSelector" class="text-lg font-medium">選擇里程:</label><select id="mileageSelector" class="p-2 border border-gray-300 rounded-md"></select></div>
+                    <div class="bg-gray-50 p-4 rounded-lg mb-6 text-center"><h4 class="text-xl font-semibold text-gray-700">該斷面工程量</h4><div id="areaDisplay" class="text-lg mt-2">--</div></div>
+                    <div id="chartContainer" class="chart-container mb-8"><canvas id="elevationChart"></canvas></div>
+                    <div>
+                        <h4 class="text-xl font-semibold mb-4">高程差詳細資料</h4>
+                        <div id="analysis-selector-1" class="mb-6"></div>
+                        <div id="differenceTableContainer" class="overflow-x-auto"></div>
+                    </div>
+                </div>
+            </div>
+            <div id="all-mileage-card" class="data-card hidden">
+                 <div class="collapsible-header flex justify-between items-center border-b pb-4 mb-6"><h3 class="text-2xl font-bold text-gray-800">全里程斷面</h3><svg class="chevron-icon w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg></div>
+                <div id="allMileageChartsContainer" class="collapsible-content grid grid-cols-1 lg:grid-cols-2 gap-8 hidden"></div>
+            </div>
+            <div id="summary-results" class="data-card hidden">
+                <div class="collapsible-header flex justify-between items-center border-b pb-4 mb-6"><h3 class="text-2xl font-bold text-gray-800">刨鋪厚度計算</h3><svg class="chevron-icon w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg></div>
+                <div class="collapsible-content hidden space-y-6">
+                    <div id="analysis-selector-2" class="mt-4"></div>
+                     <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">計算方式:</label>
+                        <div class="flex gap-4">
+                            <div><input type="radio" name="calcMethod" id="method-specific" value="specific" checked class="hidden"><label for="method-specific" class="radio-label">指定支距</label></div>
+                            <div><input type="radio" name="calcMethod" id="method-interval" value="interval" class="hidden"><label for="method-interval" class="radio-label">等間距計算</label></div>
+                        </div>
+                    </div>
+                    <div id="specific-offset-inputs">
+                        <div class="grid grid-cols-1"><label for="customOffsets" class="block text-sm font-medium text-gray-700 mb-1">指定支距 (以空格分隔):</label><input type="text" id="customOffsets" class="w-full p-2 border border-gray-300 rounded-md" value="-5.6 -4.2 -2.8 -1.4 0 1.4 2.8 4.2 5.6"></div>
+                    </div>
+                    <div id="interval-inputs" class="hidden">
+                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
+                            <div><label for="interval-distance" class="block text-sm font-medium text-gray-700 mb-1">間距 (公尺):</label><input type="number" id="interval-distance" value="1.4" step="0.1" class="w-full p-2 border border-gray-300 rounded-md"></div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">計算方向:</label>
+                                <div class="flex gap-2"><input type="radio" name="interval-direction" id="dir-l2r" value="l2r" checked class="hidden"><label for="dir-l2r" class="radio-label text-sm">由左至右</label><input type="radio" name="interval-direction" id="dir-r2l" value="r2l" class="hidden"><label for="dir-r2l" class="radio-label text-sm">由右至左</label></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="text-center"><button id="summaryButton" class="w-full md:w-auto bg-green-600 hover:bg-green-700 text-white py-2 px-8 rounded-lg">生成總表與圖表</button></div>
+                    <div id="summaryTableContainer" class="overflow-x-auto mt-6"></div>
+                    <div id="thickness-chart-container" class="chart-container mt-8"><canvas id="thicknessDistributionChart"></canvas></div>
+                </div>
+            </div>
+            <div id="volume-summary-card" class="data-card hidden">
+                 <div class="collapsible-header flex justify-between items-center border-b pb-4 mb-6"><h3 class="text-2xl font-bold text-gray-800">刨除量及舖築量分析</h3><svg class="chevron-icon w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg></div>
+                <div class="collapsible-content hidden">
+                    <div class="bg-gray-50 p-6 rounded-lg mb-6 text-center"><h4 class="text-xl font-semibold">工程總量</h4><div id="totalVolumeDisplay" class="text-lg mt-2 font-bold grid grid-cols-1 md:grid-cols-2 gap-2">--</div></div>
+                    <div><h4 id="area-table-title" class="text-xl font-semibold mb-4">各里程詳細資料</h4><div id="areaTableContainer" class="overflow-x-auto"></div></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <footer class="text-center text-sm text-gray-500 py-8 px-4">
+        <p id="footer-info" class="mb-1"></p>
+        <p class="mt-1">從最初的斷面繪圖，到後來加入面積、土方量計算，並建構出更穩定的分享機制，這是一段不斷學習與解決問題的過程。</p>
+        <p class="mt-1">希望這個持續演進的小工具，能為您的工作帶來一些便利。</p>
+    </footer>
+
+    <!-- Custom Modal -->
+    <div id="custom-modal" class="modal-backdrop">
+        <div class="modal-content">
+            <h3 id="modal-title" class="text-2xl font-bold text-gray-800 mb-4"></h3>
+            <p id="modal-message" class="text-gray-600 mb-6"></p>
+            <input type="text" id="modal-input" class="w-full p-2 border border-gray-300 rounded-md mb-4 hidden">
+            <div id="modal-buttons" class="flex justify-end gap-3">
+                <!-- Buttons are added dynamically -->
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getFirestore, collection, addDoc, query, onSnapshot, orderBy, doc, getDoc, deleteDoc, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- 全域變數 ---
+            let charts = {}, dataMap1 = {}, dataMap2 = {}, dataMap3 = {}, allSortedMileages = [];
+            let analysisPair = { a: 1, b: 2 }; 
+            let summaryAnalysisPair = { a: 1, b: 2 };
+            let db, auth;
+            let unsubscribe; 
+
+            // --- Modal ---
+            const modal = {
+                element: document.getElementById('custom-modal'),
+                title: document.getElementById('modal-title'),
+                message: document.getElementById('modal-message'),
+                input: document.getElementById('modal-input'),
+                buttons: document.getElementById('modal-buttons'),
+                
+                show(config) {
+                    this.title.textContent = config.title;
+                    this.message.innerHTML = config.message || '';
+                    this.message.style.display = config.message ? 'block' : 'none';
+                    this.input.style.display = 'none';
+                    this.buttons.innerHTML = '';
+
+                    if (config.type === 'prompt') {
+                        this.input.value = config.defaultValue || '';
+                        this.input.style.display = 'block';
+                        this.buttons.innerHTML = `
+                            <button class="modal-cancel bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded">取消</button>
+                            <button class="modal-confirm bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">儲存</button>
+                        `;
+                        this.input.focus();
+                    } else if (config.type === 'confirm') {
+                        this.buttons.innerHTML = `
+                            <button class="modal-cancel bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded">取消</button>
+                            <button class="modal-confirm bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded">確認</button>
+                        `;
+                    } else { // 'alert'
+                        this.buttons.innerHTML = `<button class="modal-confirm bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">關閉</button>`;
+                    }
+                    
+                    this.element.classList.add('visible');
+
+                    return new Promise((resolve) => {
+                        const confirmBtn = this.buttons.querySelector('.modal-confirm');
+                        const cancelBtn = this.buttons.querySelector('.modal-cancel');
+
+                        const close = (value) => {
+                            this.element.classList.remove('visible');
+                            resolve(value);
+                        }
+
+                        confirmBtn.onclick = () => close(config.type === 'prompt' ? this.input.value : true);
+                        if(cancelBtn) cancelBtn.onclick = () => close(config.type === 'prompt' ? null : false);
+                    });
+                }
+            };
+
+            // --- Firebase 初始化與驗證 ---
+            function initializeFirebase() {
+                const firebaseConfig = {
+                    apiKey: "AIzaSyDZuFavG2_diY8MLKw-DlPJxZEbwIIQ1hM",
+                    authDomain: "ac-tool-529aa.firebaseapp.com",
+                    projectId: "ac-tool-529aa",
+                    storageBucket: "ac-tool-529aa.firebasestorage.app",
+                    messagingSenderId: "805495795043",
+                    appId: "1:805495795043:web:1c73ccc07f39d5196c7756",
+                    measurementId: "G-W81FRXJ8Q3"
+                };
+
+                try {
+                    const app = initializeApp(firebaseConfig);
+                    db = getFirestore(app);
+                    auth = getAuth(app);
+
+                    onAuthStateChanged(auth, user => {
+                        updateAuthUI(user);
+                        loadSavedAnalyses(); // 讀取為公開，登入與否都能看到列表
+                    });
+                } catch(e) {
+                    console.error("Firebase 初始化失敗:", e);
+                    document.getElementById('error-message').textContent = `Firebase 初始化失敗: ${e.message}`;
+                    document.getElementById('saved-list').innerHTML = '<li>資料庫連線失敗。</li>';
+                }
+            }
+
+            // --- 登入 / 登出 ---
+            function updateAuthUI(user) {
+                const bar = document.getElementById('auth-bar');
+                if (!bar) return;
+                if (user) {
+                    bar.innerHTML = `
+                        <span class="text-gray-600">已登入：<span class="font-semibold text-gray-800">${user.email || user.displayName || ''}</span></span>
+                        <button id="logoutBtn" class="bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold py-1 px-3 rounded">登出</button>
+                    `;
+                    document.getElementById('logoutBtn').addEventListener('click', () => signOut(auth));
+                } else {
+                    bar.innerHTML = `
+                        <span class="text-gray-500">尚未登入（可瀏覽，但儲存／編輯／刪除需登入）</span>
+                        <button id="loginBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-1 px-3 rounded">使用 Google 登入</button>
+                    `;
+                    document.getElementById('loginBtn').addEventListener('click', loginWithGoogle);
+                }
+            }
+
+            function loginWithGoogle() {
+                const provider = new GoogleAuthProvider();
+                signInWithPopup(auth, provider).catch(error => {
+                    console.error("登入失敗:", error);
+                    modal.show({ title: '登入失敗', message: `無法完成 Google 登入：${error.message}`, type: 'alert' });
+                });
+            }
+            
+            async function saveAnalysis() {
+                if (!auth || !auth.currentUser) {
+                    modal.show({ title: '需要登入', message: '請先用頁面上方的「使用 Google 登入」按鈕登入，才能儲存到雲端。', type: 'alert' });
+                    return;
+                }
+                const defaultName = `${document.getElementById('section1Name').value} vs ${document.getElementById('section2Name').value}`;
+                const description = await modal.show({ title: '儲存分析紀錄', message: '請為此分析紀錄命名：', type: 'prompt', defaultValue: defaultName });
+                
+                if (!description) return; 
+
+                const dataToSave = {
+                    userId: auth.currentUser.uid,
+                    creatorEmail: auth.currentUser.email || '',
+                    createdAt: new Date(),
+                    description: description,
+                    n1: document.getElementById('section1Name').value, n2: document.getElementById('section2Name').value, n3: document.getElementById('section3Name').value,
+                    d1: document.getElementById('section1Data').value, d2: document.getElementById('section2Data').value, d3: document.getElementById('section3Data').value,
+                    c: document.getElementById('customOffsets').value, ap: analysisPair
+                };
+                try {
+                    await addDoc(collection(db, "analyses"), dataToSave);
+                    modal.show({ title: '成功', message: '分析結果已儲存！', type: 'alert' });
+                } catch (e) {
+                    console.error("儲存失敗: ", e);
+                    modal.show({ title: '儲存失敗', message: '儲存失敗，請檢查主控台的錯誤訊息。', type: 'alert' });
+                }
+            }
+
+            function loadSavedAnalyses() {
+                if (unsubscribe) unsubscribe(); 
+                if (!db) return;
+
+                const sortByEl = document.getElementById('sort-by');
+                const [field, direction] = sortByEl.value.split('-');
+                
+                const q = query(collection(db, "analyses"), orderBy(field, direction));
+                
+                unsubscribe = onSnapshot(q, (querySnapshot) => {
+                    const savedList = document.getElementById('saved-list');
+                    savedList.innerHTML = '';
+                    if (querySnapshot.empty) {
+                        savedList.innerHTML = '<li>尚無儲存紀錄。</li>';
+                        return;
+                    }
+                    querySnapshot.forEach((doc) => {
+                        const data = doc.data();
+                        const date = data.createdAt.toDate().toLocaleString('zh-TW');
+                        const li = document.createElement('li');
+                        li.className = 'flex items-center justify-between py-2 border-b border-gray-200';
+                        li.innerHTML = `
+                            <div class="flex-grow">
+                                <span class="font-semibold text-blue-600">${data.description || `${data.n1} vs ${data.n2}`}</span>
+                                <span class="text-xs text-gray-500 block">${date}</span>
+                            </div>
+                            <div class="flex-shrink-0 space-x-2">
+                               <button data-id="${doc.id}" class="load-btn text-sm bg-blue-100 text-blue-700 px-2 py-1 rounded">讀取</button>
+                               <button data-id="${doc.id}" data-name="${data.description || ''}" class="edit-btn text-sm bg-yellow-100 text-yellow-700 px-2 py-1 rounded">編輯</button>
+                               <button data-id="${doc.id}" class="delete-btn text-sm bg-red-100 text-red-700 px-2 py-1 rounded">刪除</button>
+                            </div>
+                        `;
+                        savedList.appendChild(li);
+                    });
+                    
+                    document.querySelectorAll('.load-btn').forEach(b => b.addEventListener('click', (e) => loadAnalysisById(e.target.dataset.id)));
+                    document.querySelectorAll('.edit-btn').forEach(b => b.addEventListener('click', (e) => editAnalysisName(e.target.dataset.id, e.target.dataset.name)));
+                    document.querySelectorAll('.delete-btn').forEach(b => b.addEventListener('click', (e) => deleteAnalysis(e.target.dataset.id)));
+
+                }, error => {
+                    console.error("讀取歷史紀錄失敗:", error);
+                    document.getElementById('saved-list').innerHTML = `<li>讀取歷史紀錄失敗: ${error.message}</li>`;
+                });
+            }
+
+            async function loadAnalysisById(docId) {
+                try {
+                    const docRef = doc(db, "analyses", docId);
+                    const docSnap = await getDoc(docRef);
+                    if (docSnap.exists()) {
+                        const data = docSnap.data();
+                        document.getElementById('section1Name').value = data.n1 || '斷面 1';
+                        document.getElementById('section2Name').value = data.n2 || '斷面 2';
+                        document.getElementById('section3Name').value = data.n3 || '額外斷面';
+                        document.getElementById('section1Data').value = data.d1 || '';
+                        document.getElementById('section2Data').value = data.d2 || '';
+                        document.getElementById('section3Data').value = data.d3 || '';
+                        document.getElementById('customOffsets').value = data.c || '';
+                        analysisPair = data.ap || { a: 1, b: 2 };
+                        processData();
+                        modal.show({ title: '成功', message: '資料已成功讀取！', type: 'alert' });
+                    } else {
+                        modal.show({ title: '錯誤', message: '找不到該筆儲存紀錄。', type: 'alert' });
+                    }
+                } catch (e) {
+                    console.error("讀取失敗: ", e);
+                    modal.show({ title: '讀取失敗', message: '讀取失敗，請查看主控台錯誤訊息。', type: 'alert' });
+                }
+            }
+
+            async function editAnalysisName(docId, currentName) {
+                const newName = await modal.show({ title: '編輯紀錄名稱', message: '請輸入新的紀錄名稱：', type: 'prompt', defaultValue: currentName });
+                if (newName && newName.trim() !== '') {
+                    const docRef = doc(db, "analyses", docId);
+                    try {
+                         await updateDoc(docRef, { description: newName.trim() });
+                    } catch(e) {
+                        modal.show({ title: '更新失敗', message: '更新失敗，請檢查網路連線或權限設定。', type: 'alert' });
+                        console.error(e);
+                    }
+                }
+            }
+
+            async function deleteAnalysis(docId) {
+                const confirmed = await modal.show({ title: '確認刪除', message: '您確定要刪除這筆紀錄嗎？此操作無法復原。', type: 'confirm' });
+                if (confirmed) {
+                    try {
+                        await deleteDoc(doc(db, "analyses", docId));
+                    } catch(e) {
+                         modal.show({ title: '刪除失敗', message: '刪除失敗，請檢查網路連線或權限設定。', type: 'alert' });
+                         console.error(e);
+                    }
+                }
+            }
+            
+            // --- Import / Export ---
+            function exportData() {
+                const dataToExport = {
+                    n1: document.getElementById('section1Name').value,
+                    d1: document.getElementById('section1Data').value,
+                    n2: document.getElementById('section2Name').value,
+                    d2: document.getElementById('section2Data').value,
+                    n3: document.getElementById('section3Name').value,
+                    d3: document.getElementById('section3Data').value,
+                    c: document.getElementById('customOffsets').value,
+                };
+                const dataStr = JSON.stringify(dataToExport, null, 2);
+                const blob = new Blob([dataStr], {type: "application/json"});
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `ac-analysis-data-${new Date().toISOString().slice(0,10)}.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }
+
+            function importData(event) {
+                const file = event.target.files[0];
+                if (!file) return;
+
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const data = JSON.parse(e.target.result);
+                        document.getElementById('section1Name').value = data.n1 || '原地面';
+                        document.getElementById('section1Data').value = data.d1 || '';
+                        document.getElementById('section2Name').value = data.n2 || '刨除後';
+                        document.getElementById('section2Data').value = data.d2 || '';
+                        document.getElementById('section3Name').value = data.n3 || '舖築後';
+                        document.getElementById('section3Data').value = data.d3 || '';
+                        document.getElementById('customOffsets').value = data.c || '';
+                        modal.show({ title: '成功', message: '資料已成功匯入！', type: 'alert' });
+                        processData();
+                    } catch (err) {
+                        modal.show({ title: '匯入失敗', message: `無法解析檔案，請確認檔案格式是否為正確的 JSON。錯誤: ${err.message}`, type: 'alert' });
+                    }
+                };
+                reader.readAsText(file);
+                // Reset file input to allow importing the same file again
+                event.target.value = '';
+            }
+
+            // --- Core Logic ---
+            function parseData(dataString) {
+                const dataMap = {};
+                if (!dataString || dataString.trim() === '') return dataMap;
+                dataString.trim().split('\n').forEach((line, index) => {
+                    if (line.trim() === '') return;
+                    const values = line.split(/\s+/).filter(v => v.trim() !== '' && !isNaN(v)).map(Number);
+                    if (values.length < 3) return;
+                    const mileage = values.shift();
+                    let found = false;
+                    for (let k = Math.floor(values.length / 2); k >= 1; k--) {
+                        if (values.length >= k * 2) {
+                            const dataBlock = values.slice(values.length - k * 2);
+                            const potentialElevations = dataBlock.slice(0, k);
+                            const potentialOffsets = dataBlock.slice(k);
+                            if (potentialOffsets.includes(0)) {
+                                dataMap[mileage] = Array.from({length: k}, (_, i) => ({ x: potentialOffsets[i], y: potentialElevations[i] })).sort((a, b) => a.x - b.x);
+                                found = true;
+                                break;
+                            }
+                        }
+                    }
+                    if (!found && values.length % 2 === 0) {
+                         const k = values.length / 2;
+                         const elevations = values.slice(0, k);
+                         const offsets = values.slice(k);
+                         dataMap[mileage] = Array.from({length: k}, (_, i) => ({ x: offsets[i], y: elevations[i] })).sort((a, b) => a.x - b.x);
+                    } else if (!found) {
+                         console.warn(`無法解析第 ${index + 1} 行資料: "${line}"。`);
+                    }
+                });
+                return dataMap;
+            }
+            
+            function processData() {
+                document.getElementById('error-message').textContent = '';
+                try {
+                    // 1. Always parse Ground and Paved data first.
+                    if (!document.getElementById('section1Data').value.trim()) throw new Error("斷面 1 為必填欄位。");
+                    dataMap1 = parseData(document.getElementById('section1Data').value);
+                    dataMap3 = parseData(document.getElementById('section3Data').value);
+
+                    // 2. Determine how to get Milling data (dataMap2).
+                    const section2Method = document.querySelector('input[name="section2Method"]:checked').value;
+                    if (section2Method === 'calc') {
+                        const thicknessCm = parseFloat(document.getElementById('millingThickness').value);
+                        if (isNaN(thicknessCm)) throw new Error("請輸入有效的刨除厚度數值。");
+                        const thicknessM = thicknessCm / 100;
+                        const millingBase = document.querySelector('input[name="millingBase"]:checked').value;
+
+                        const baseMap = (millingBase === 'ground') ? dataMap1 : dataMap3;
+                        const baseName = (millingBase === 'ground') ? '原地面' : '舖築後';
+
+                        if (Object.keys(baseMap).length === 0) {
+                            throw new Error(`若要依厚度計算，必須先輸入有效的「${baseName}」資料。`);
+                        }
+
+                        dataMap2 = {};
+                        for (const mileage in baseMap) {
+                            if (baseMap[mileage]) {
+                                 dataMap2[mileage] = baseMap[mileage].map(point => ({
+                                    x: point.x,
+                                    y: point.y - thicknessM
+                                }));
+                            }
+                        }
+                    } else {
+                        dataMap2 = parseData(document.getElementById('section2Data').value);
+                    }
+
+                    // 3. Continue with the rest of the analysis.
+                    const mileageSet = new Set([...Object.keys(dataMap1), ...Object.keys(dataMap2), ...Object.keys(dataMap3)]);
+                    allSortedMileages = Array.from(mileageSet).map(Number).sort((a, b) => b - a);
+                    if (allSortedMileages.length === 0) throw new Error("未解析出有效的里程資料。請檢查資料格式。");
+                    
+                    const selector = document.getElementById('mileageSelector');
+                    selector.innerHTML = '';
+                    allSortedMileages.forEach(mileage => selector.add(new Option(mileage, mileage)));
+                    document.querySelectorAll('#results-container > .data-card').forEach(card => card.classList.remove('hidden'));
+                    renderAnalysisSelectors();
+                    runAllAnalyses();
+                } catch (error) {
+                     document.getElementById('error-message').textContent = `錯誤: ${error.message}`;
+                     document.querySelectorAll('#results-container > .data-card').forEach(card => card.classList.add('hidden'));
+                }
+            }
+            
+            function runAllAnalyses() {
+                calculateAndDisplayOverallSummary();
+                displayAllMileageCharts();
+                updateIndividualDisplay();
+            }
+
+            function updateIndividualDisplay() {
+                const selectedMileage = document.getElementById('mileageSelector').value;
+                if (!selectedMileage) return;
+                const p1 = dataMap1[selectedMileage] || [], p2 = dataMap2[selectedMileage] || [], p3 = dataMap3[selectedMileage] || [];
+                createOrUpdateChart('mainChart', document.getElementById('elevationChart'), selectedMileage, p1, p2, p3);
+                calculateAndDisplayIndividualDifferences(p1, p2, p3);
+                const planingArea = calculateSectionArea(p1, p2);
+                const lowerBoundary = createLowerBoundary(p1, p2);
+                const pavingArea = calculateSectionArea(lowerBoundary, p3);
+                let areaHTML = `<span class="font-semibold text-red-600">刨除面積:</span> ${planingArea.cutArea.toFixed(3)} m²`;
+                if (p3 && p3.length > 0) {
+                     areaHTML += `&nbsp;&nbsp; <span class="font-semibold text-green-600">舖築面積:</span> ${pavingArea.fillArea.toFixed(3)} m²`;
+                }
+                document.getElementById('areaDisplay').innerHTML = areaHTML;
+            }
+            
+            function createOrUpdateChart(chartId, canvasEl, mileage, p1, p2, p3) {
+                if (charts[chartId]) charts[chartId].destroy();
+                const datasets = [
+                    { label: document.getElementById('section1Name').value, data: p1, borderColor: 'rgb(59, 130, 246)', tension: 0.1, fill: false, pointRadius: 5 },
+                    { label: document.getElementById('section2Name').value, data: p2, borderColor: 'rgb(239, 68, 68)', tension: 0.1, fill: false, pointRadius: 5 }
+                ];
+                if (p3 && p3.length > 0) {
+                    datasets.push({ label: document.getElementById('section3Name').value, data: p3, borderColor: 'rgb(34, 197, 94)', tension: 0.1, fill: false, pointRadius: 5, borderDash: [5, 5] });
+                }
+                charts[chartId] = new Chart(canvasEl, { type: 'line', data: { datasets }, options: { responsive: true, maintainAspectRatio: false, plugins: { title: { display: true, text: `里程 ${mileage} 斷面圖`, font: { size: 18 } } }, scales: { x: { type: 'linear', title: { display: true, text: '支距 (m)' } }, y: { title: { display: true, text: '高程 (m)' } } } } });
+            }
+
+            function displayAllMileageCharts() {
+                const container = document.getElementById('allMileageChartsContainer');
+                container.innerHTML = '';
+                allSortedMileages.forEach(m => {
+                    const chartWrapper = document.createElement('div');
+                    chartWrapper.className = 'small-chart-container';
+                    const canvas = document.createElement('canvas');
+                    chartWrapper.appendChild(canvas);
+                    container.appendChild(chartWrapper);
+                    createOrUpdateChart(`mileage-${m}`, canvas, m, dataMap1[m] || [], dataMap2[m] || [], dataMap3[m] || []);
+                });
+            }
+
+            function interpolate(points, x) {
+                if (points.length < 2) return null;
+                let p1 = null, p2 = null;
+                for (let i = 0; i < points.length - 1; i++) if (points[i].x <= x && points[i+1].x >= x) { p1 = points[i]; p2 = points[i+1]; break; }
+                if (!p1 || !p2) return null;
+                if (p2.x === p1.x) return p1.y;
+                return p1.y + (x - p1.x) * (p2.y - p1.y) / (p2.x - p1.x);
+            }
+            
+            function findClosestPoint(points, x) {
+                return points.length > 0 ? points.reduce((p, c) => (Math.abs(c.x - x) < Math.abs(p.x - x) ? c : p)) : null;
+            }
+
+            function calculateAndDisplayIndividualDifferences(p1, p2, p3) {
+                const container = document.getElementById('differenceTableContainer');
+                const isSection3Active = p3 && p3.length > 0;
+                const sortedOffsets = [...new Set([...p1.map(p => p.x), ...p2.map(p => p.x), ...(isSection3Active ? p3.map(p => p.x) : [])])].sort((a, b) => a - b);
+                const n1 = document.getElementById('section1Name').value, n2 = document.getElementById('section2Name').value, n3 = document.getElementById('section3Name').value;
+                
+                let tableHeader = `<thead class="bg-gray-50"><tr>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">支距(m)</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">${n1}(m)</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">${n2}(m)</th>
+                    ${isSection3Active ? `<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">${n3}(m)</th>` : ''}
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">差(${document.getElementById(`section${analysisPair.a}Name`).value} - ${document.getElementById(`section${analysisPair.b}Name`).value})(cm)</th>
+                    </tr></thead>`;
+
+                let tableBody = `<tbody class="bg-white divide-y divide-gray-200">`;
+                for (const offset of sortedOffsets) {
+                    const y1 = interpolate(p1, offset), y2 = interpolate(p2, offset), y3 = isSection3Active ? interpolate(p3, offset) : null;
+                    const dataMaps = {1: y1, 2: y2, 3: y3};
+                    const val1 = dataMaps[analysisPair.a];
+                    const val2 = dataMaps[analysisPair.b];
+                    let diff = (val1 !== null && val2 !== null) ? ((val1 - val2) * 100).toFixed(1) : 'N/A';
+                    
+                    tableBody += `<tr>
+                        <td class="px-4 py-4">${offset.toFixed(2)}</td>
+                        <td class="px-4 py-4">${y1?.toFixed(3)??'N/A'}</td>
+                        <td class="px-4 py-4">${y2?.toFixed(3)??'N/A'}</td>
+                        ${isSection3Active ? `<td class="px-4 py-4">${y3?.toFixed(3)??'N/A'}</td>` : ''}
+                        <td class="px-4 py-4 ${parseFloat(diff)>=0?'text-red-600':'text-green-600'}">${diff}</td>
+                    </tr>`;
+                }
+                tableBody += `</tbody>`;
+                container.innerHTML = `<table class="min-w-full divide-y divide-gray-200">${tableHeader}${tableBody}</table>`;
+            }
+            
+            function calculateSectionArea(p1, p2) {
+                let cut = 0, fill = 0;
+                if (!p1 || !p2 || p1.length === 0 || p2.length === 0) return { cutArea: 0, fillArea: 0 };
+                const allOffsets = [...new Set([...p1.map(p => p.x), ...p2.map(p => p.x)])].sort((a, b) => a - b);
+                for (let i = 0; i < allOffsets.length - 1; i++) {
+                    const x1 = allOffsets[i], x2 = allOffsets[i+1];
+                    const y1_s = interpolate(p1, x1), y2_s = interpolate(p2, x1), y1_e = interpolate(p1, x2), y2_e = interpolate(p2, x2);
+                    if (y1_s === null || y2_s === null || y1_e === null || y2_e === null) continue;
+                    const h1 = y1_s - y2_s, h2 = y1_e - y2_e, w = x2 - x1;
+                    if (h1 * h2 >= 0) { const a = (h1 + h2) / 2 * w; if (a > 0) cut += a; else fill -= a; } 
+                    else {
+                        const m1 = (y1_e - y1_s) / w, m2 = (y2_e - y2_s) / w;
+                        if (m1 === m2) continue;
+                        const iX = x1 + (y2_s - y1_s) / (m1 - m2);
+                        const a1 = 0.5 * h1 * (iX - x1); if (a1 > 0) cut += a1; else fill -= a1;
+                        const a2 = 0.5 * h2 * (x2 - iX); if (a2 > 0) cut += a2; else fill -= a2;
+                    }
+                }
+                return { cutArea: cut, fillArea: fill };
+            }
+
+            function createLowerBoundary(p1, p2) {
+                if (!p1 || p1.length === 0) return p2 || [];
+                if (!p2 || p2.length === 0) return p1 || [];
+                const lowerBoundaryPoints = [];
+                const allOffsets = [...new Set([...p1.map(p => p.x), ...p2.map(p => p.x)])].sort((a, b) => a - b);
+                for (const x of allOffsets) {
+                    const y1 = interpolate(p1, x);
+                    const y2 = interpolate(p2, x);
+                    if (y1 !== null && y2 !== null) {
+                        lowerBoundaryPoints.push({ x: x, y: Math.min(y1, y2) });
+                    } else if (y1 !== null) {
+                        lowerBoundaryPoints.push({ x: x, y: y1 });
+                    } else if (y2 !== null) {
+                        lowerBoundaryPoints.push({ x: x, y: y2 });
+                    }
+                }
+                return lowerBoundaryPoints;
+            }
+
+            function calculateAndDisplayOverallSummary() {
+                let planingVolume = 0, pavingVolume = 0;
+                const hasS3 = Object.keys(dataMap3).length > 0;
+                const areaDetails = [];
+
+                allSortedMileages.forEach(m => {
+                    const p1 = dataMap1[m] || [];
+                    const p2 = dataMap2[m] || [];
+                    const p3 = dataMap3[m] || [];
+                    
+                    const planingAreaResult = calculateSectionArea(p1, p2);
+                    const lowerBoundary = createLowerBoundary(p1, p2);
+                    const pavingAreaResult = calculateSectionArea(lowerBoundary, p3);
+
+                    const planingWidth = p1.length > 1 ? Math.max(...p1.map(p => p.x)) - Math.min(...p1.map(p => p.x)) : 0;
+                    
+                    const pavingBoundaryForWidth = (p3 && p3.length > 1) ? p3 : (lowerBoundary.length > 1 ? lowerBoundary : []);
+                    const pavingWidth = pavingBoundaryForWidth.length > 1 ? Math.max(...pavingBoundaryForWidth.map(p => p.x)) - Math.min(...pavingBoundaryForWidth.map(p => p.x)) : 0;
+
+                    const avgPlaningThickness = planingWidth > 0 ? (planingAreaResult.cutArea / planingWidth) * 100 : 0; // cm
+                    const avgPavingThickness = pavingWidth > 0 ? (pavingAreaResult.fillArea / pavingWidth) * 100 : 0; // cm
+
+                    areaDetails.push({
+                        mileage: m,
+                        planingArea: planingAreaResult.cutArea,
+                        pavingArea: pavingAreaResult.fillArea,
+                        avgPlaningThickness: avgPlaningThickness,
+                        avgPavingThickness: avgPavingThickness
+                    });
+                });
+
+                for (let i = 0; i < areaDetails.length - 1; i++) {
+                    const s1 = areaDetails[i];
+                    const s2 = areaDetails[i+1];
+                    const dist = Math.abs(s1.mileage - s2.mileage);
+                    planingVolume += ((s1.planingArea + s2.planingArea) / 2) * dist;
+                    if (hasS3) {
+                        pavingVolume += ((s1.pavingArea + s2.pavingArea) / 2) * dist;
+                    }
+                }
+
+                const totalAvgPlaningThickness = areaDetails.reduce((sum, d) => sum + d.avgPlaningThickness, 0) / (areaDetails.length || 1);
+                const totalAvgPavingThickness = areaDetails.reduce((sum, d) => sum + d.avgPavingThickness, 0) / (areaDetails.length || 1);
+
+                let volumeHTML = `
+                    <div>
+                        <span class="font-semibold text-red-600">總刨除量:</span> ${planingVolume.toFixed(3)} m³ <br>
+                        <span class="text-sm text-gray-600">推估平均刨除厚度: ${totalAvgPlaningThickness.toFixed(2)} cm</span>
+                    </div>
+                `;
+                if (hasS3) {
+                    volumeHTML += `
+                    <div>
+                        <span class="font-semibold text-green-600">總舖築量:</span> ${pavingVolume.toFixed(3)} m³ <br>
+                        <span class="text-sm text-gray-600">推估平均舖築厚度: ${totalAvgPavingThickness.toFixed(2)} cm</span>
+                    </div>
+                    `;
+                }
+                document.getElementById('totalVolumeDisplay').innerHTML = volumeHTML;
+
+                const areaContainer = document.getElementById('areaTableContainer');
+                let table = `<table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr>
+                    <th class="px-4 py-3 text-left text-xs text-gray-500 uppercase">里程</th>
+                    <th class="px-4 py-3 text-left text-xs text-gray-500 uppercase">刨除面積(m²)</th>
+                    <th class="px-4 py-3 text-left text-xs text-gray-500 uppercase">平均刨除厚度(cm)</th>
+                    ${hasS3 ? `<th class="px-4 py-3 text-left text-xs text-gray-500 uppercase">舖築面積(m²)</th><th class="px-4 py-3 text-left text-xs text-gray-500 uppercase">平均舖築厚度(cm)</th>` : ''}
+                    </tr></thead><tbody class="bg-white divide-y divide-gray-200">`;
+
+                areaDetails.forEach(detail => {
+                    table += `<tr>
+                        <td class="px-4 py-4 font-semibold">${detail.mileage}</td>
+                        <td class="px-4 py-4 text-red-600">${detail.planingArea.toFixed(3)}</td>
+                        <td class="px-4 py-4 text-red-600">${detail.avgPlaningThickness.toFixed(2)}</td>
+                        ${hasS3 ? `<td class="px-4 py-4 text-green-600">${detail.pavingArea.toFixed(3)}</td><td class="px-4 py-4 text-green-600">${detail.avgPavingThickness.toFixed(2)}</td>` : ''}
+                    </tr>`;
+                });
+                areaContainer.innerHTML = table + '</tbody></table>';
+            }
+
+            function generateSummaryReport() {
+                const calcMethod = document.querySelector('input[name="calcMethod"]:checked').value;
+                let tableHeaders = [];
+                let allRowsData = [];
+                let maxPointsCount = 0;
+
+                const dataMaps = { 1: dataMap1, 2: dataMap2, 3: dataMap3 };
+                const selectedMap1 = dataMaps[summaryAnalysisPair.a];
+                const selectedMap2 = dataMaps[summaryAnalysisPair.b];
+
+                if (calcMethod === 'specific') {
+                    const offsetsInput = document.getElementById('customOffsets').value;
+                    if (!offsetsInput.trim()) { modal.show({title: '提示', message: '請輸入指定支距。', type: 'alert'}); return; }
+                    const calculationPoints = offsetsInput.trim().split(/[\s,]+/).map(Number).filter(n => !isNaN(n)).sort((a,b) => a - b);
+                    tableHeaders = calculationPoints.map(o => `支距 ${o.toFixed(2)}`);
+                    maxPointsCount = tableHeaders.length;
+
+                    allSortedMileages.forEach(m => {
+                        const p1 = selectedMap1[m]||[], p2 = selectedMap2[m]||[];
+                        let rowData = [];
+                        calculationPoints.forEach(offset => {
+                            let y1 = interpolate(p1, offset), y2 = interpolate(p2, offset), note = '', noteOffset = null;
+                            if (y1 === null && p1.length > 0) { const c = findClosestPoint(p1, offset); y1 = c.y; noteOffset = c.x; }
+                            if (y2 === null && p2.length > 0) { const c = findClosestPoint(p2, offset); y2 = c.y; noteOffset = noteOffset || c.x; }
+                            const diff = (y1 !== null && y2 !== null) ? (y1 - y2) * 100 : null;
+                            
+                            let noteText = "";
+                            if (noteOffset !== null) {
+                                noteText = `(近${noteOffset.toFixed(2)})`;
+                            }
+
+                            rowData.push({
+                                value: diff, 
+                                note: noteText, 
+                                targetOffset: offset
+                            });
+                        });
+                        allRowsData.push({mileage: m, data: rowData});
+                    });
+                } else { // Interval method
+                    const interval = parseFloat(document.getElementById('interval-distance').value);
+                    const direction = document.querySelector('input[name="interval-direction"]:checked').value;
+                    if (isNaN(interval) || interval <= 0) { modal.show({title: '提示', message: '請輸入有效的間距。', type: 'alert'}); return; }
+                    
+                    allSortedMileages.forEach(m => {
+                        const p1 = selectedMap1[m]||[], p2 = selectedMap2[m]||[];
+                        const localPoints = [...p1, ...p2];
+                        let currentRowData = [];
+
+                        if (localPoints.length > 1) {
+                            const localMin = Math.min(...localPoints.map(p => p.x));
+                            const localMax = Math.max(...localPoints.map(p => p.x));
+                            
+                            const startOffset = direction === 'l2r' ? localMin : localMax;
+                            const endOffset = direction === 'l2r' ? localMax : localMin;
+                            const step = direction === 'l2r' ? interval : -interval;
+
+                            for (let offset = startOffset; (step > 0 ? offset <= endOffset : offset >= endOffset); offset += step) {
+                                const y1 = interpolate(p1, offset);
+                                const y2 = interpolate(p2, offset);
+                                const diff = (y1 !== null && y2 !== null) ? (y1 - y2) * 100 : null;
+                                currentRowData.push({ value: diff, targetOffset: offset });
+                            }
+                            // Ensure the absolute edge is included if not perfectly divisible
+                            const lastCalcPoint = currentRowData[currentRowData.length - 1].targetOffset;
+                            if (direction === 'l2r' && lastCalcPoint < endOffset) {
+                                const y1End = interpolate(p1, endOffset);
+                                const y2End = interpolate(p2, endOffset);
+                                const diffEnd = (y1End !== null && y2End !== null) ? (y1End - y2End) * 100 : null;
+                                currentRowData.push({ value: diffEnd, targetOffset: endOffset });
+                            } else if (direction === 'r2l' && lastCalcPoint > endOffset) {
+                                const y1End = interpolate(p1, endOffset);
+                                const y2End = interpolate(p2, endOffset);
+                                const diffEnd = (y1End !== null && y2End !== null) ? (y1End - y2End) * 100 : null;
+                                currentRowData.push({ value: diffEnd, targetOffset: endOffset });
+                            }
+                        }
+                        
+                        allRowsData.push({ mileage: m, data: currentRowData });
+                        if (currentRowData.length > maxPointsCount) {
+                            maxPointsCount = currentRowData.length;
+                        }
+                    });
+
+                    for (let i = 1; i <= maxPointsCount; i++) {
+                        tableHeaders.push(`點位 ${i}`);
+                    }
+                }
+                
+                if (allRowsData.length === 0) { modal.show({title: '提示', message: '無資料可供生成總表。', type: 'alert'}); return; }
+
+                const scatterData = [];
+                const container = document.getElementById('summaryTableContainer');
+                let table = `<table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr><th class="px-6 py-3 text-left text-xs text-gray-500 uppercase">里程</th>`;
+                tableHeaders.forEach(h => { table += `<th class="px-6 py-3 text-center text-xs text-gray-500 uppercase">${h}</th>`; });
+                table += `</tr></thead><tbody class="bg-white divide-y divide-gray-200">`;
+                
+                allRowsData.forEach(row => {
+                    table += `<tr><td class="px-6 py-4 font-semibold">${row.mileage}</td>`;
+                    
+                    if (calcMethod === 'interval') {
+                        row.data.sort((a, b) => a.targetOffset - b.targetOffset);
+                    }
+
+                    for (let i = 0; i < maxPointsCount; i++) {
+                        const cellData = row.data[i];
+                        let cellValue = '';
+                        
+                        if (cellData) {
+                            const diff = cellData.value;
+                            const targetOffset = cellData.targetOffset;
+                            const note = cellData.note || "";
+                            
+                            if (diff !== null && diff !== undefined) {
+                                cellValue = `
+                                    <span class="font-medium">${diff.toFixed(1)}</span>
+                                    <span class="text-xs text-gray-500 block">(${targetOffset.toFixed(2)}) ${note}</span>
+                                `;
+                                scatterData.push({x: targetOffset, y: row.mileage, v: diff});
+                            }
+                        }
+                        table += `<td class="px-6 py-4 text-center ${cellData && cellData.value >= 0 ? 'text-red-600' : 'text-green-600'}">${cellValue}</td>`;
+                    }
+                    table += `</tr>`;
+                });
+                container.innerHTML = table + '</tbody></table>';
+
+                displayThicknessDistributionChart(scatterData);
+            }
+
+            function displayThicknessDistributionChart(data) {
+                const canvas = document.getElementById('thicknessDistributionChart');
+                const container = document.getElementById('thickness-chart-container');
+                if (charts['thicknessChart']) charts['thicknessChart'].destroy();
+
+                if (data.length === 0) {
+                    container.style.height = '40vh';
+                    return;
+                } 
+
+                const yValues = data.map(d => d.y);
+                const uniqueY = [...new Set(yValues)];
+                const minY = Math.min(...yValues);
+                const maxY = Math.max(...yValues);
+                const yPadding = (maxY - minY) * 0.1 || 10; 
+
+                const dynamicHeight = Math.max(60, 30 + uniqueY.length * 5);
+                container.style.height = `${dynamicHeight}vh`;
+
+                charts['thicknessChart'] = new Chart(canvas, {
+                    type: 'scatter',
+                    data: {
+                        datasets: [{
+                            label: '高程差 (cm)',
+                            data: data.map(d => ({x: d.x, y: d.y, v: d.v})),
+                            backgroundColor: data.map(d => d.v >= 0 ? 'rgba(239, 68, 68, 0.7)' : 'rgba(34, 197, 94, 0.7)'),
+                            pointRadius: 5,
+                        }]
+                    },
+                    plugins: [ChartDataLabels],
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            datalabels: {
+                                align: 'top',
+                                offset: 8,
+                                padding: 4,
+                                backgroundColor: 'rgba(255, 255, 255, 0.8)',
+                                borderColor: 'rgba(128, 128, 128, 0.5)',
+                                borderWidth: 1,
+                                borderRadius: 4,
+                                color: (context) => {
+                                    const value = context.dataset.data[context.dataIndex].v;
+                                    return value >= 0 ? 'rgb(220, 38, 38)' : 'rgb(22, 163, 74)';
+                                },
+                                font: { size: 11, weight: 'bold' },
+                                formatter: (value, context) => {
+                                    return context.dataset.data[context.dataIndex].v.toFixed(1);
+                                },
+                            },
+                            title: { display: true, text: '刨鋪厚度分布圖', font: { size: 18 } },
+                            annotation: { annotations: { line1: { type: 'line', xMin: 0, xMax: 0, borderColor: 'rgb(55, 65, 81)', borderWidth: 2, label: { content: '中心線', enabled: true, position: 'start' }}}}
+                        },
+                        scales: {
+                            x: { type: 'linear', position: 'bottom', title: { display: true, text: '支距 (m)' } },
+                            y: { title: { display: true, text: '里程' }, reverse: false, min: minY - yPadding, max: maxY + yPadding }
+                        }
+                    }
+                });
+            }
+
+            function renderAnalysisSelectors() {
+                const n1 = document.getElementById('section1Name').value;
+                const n2 = document.getElementById('section2Name').value;
+                const n3 = document.getElementById('section3Name').value;
+                const hasS3 = document.getElementById('section3Data').value.trim() !== '';
+                let selectorHTML = (pairIdPrefix, currentPair) => {
+                    let html = `<div class="flex flex-wrap gap-4 justify-center">
+                        <div><input type="radio" name="${pairIdPrefix}" id="${pairIdPrefix}-pair12" value="1-2" class="hidden"><label for="${pairIdPrefix}-pair12" class="radio-label">${n1} vs ${n2}</label></div>`;
+                    if (hasS3) {
+                        html += `<div><input type="radio" name="${pairIdPrefix}" id="${pairIdPrefix}-pair13" value="1-3" class="hidden"><label for="${pairIdPrefix}-pair13" class="radio-label">${n1} vs ${n3}</label></div>
+                                     <div><input type="radio" name="${pairIdPrefix}" id="${pairIdPrefix}-pair23" value="2-3" class="hidden"><label for="${pairIdPrefix}-pair23" class="radio-label">${n2} vs ${n3}</label></div>`;
+                    }
+                    html += `</div>`;
+                    return html;
+                };
+                
+                document.getElementById('analysis-selector-1').innerHTML = selectorHTML('analysisPair1', analysisPair);
+                document.getElementById('analysis-selector-2').innerHTML = selectorHTML('analysisPair2', summaryAnalysisPair);
+                
+                document.querySelector(`input[name="analysisPair1"][value="${analysisPair.a}-${analysisPair.b}"]`).checked = true;
+                document.querySelector(`input[name="analysisPair2"][value="${summaryAnalysisPair.a}-${summaryAnalysisPair.b}"]`).checked = true;
+
+                document.querySelectorAll('input[name="analysisPair1"]').forEach(radio => {
+                    radio.addEventListener('change', (e) => {
+                        const [a, b] = e.target.value.split('-').map(Number);
+                        analysisPair = { a, b };
+                        updateIndividualDisplay();
+                    });
+                });
+                 document.querySelectorAll('input[name="analysisPair2"]').forEach(radio => {
+                    radio.addEventListener('change', (e) => {
+                        const [a, b] = e.target.value.split('-').map(Number);
+                        summaryAnalysisPair = { a, b };
+                        if(document.getElementById('summaryTableContainer').innerHTML !== '') {
+                            generateSummaryReport();
+                        }
+                    });
+                });
+            }
+            
+            function setupCollapsibleSections() {
+                document.querySelectorAll('.collapsible-header').forEach(header => {
+                    header.addEventListener('click', () => {
+                        const content = header.nextElementSibling;
+                        const icon = header.querySelector('.chevron-icon');
+                        content.classList.toggle('hidden');
+                        icon.classList.toggle('rotate-180');
+                    });
+                });
+            }
+
+            function setupSection2MethodToggle() {
+                const manualInput = document.getElementById('section2-manual-input');
+                const calcInput = document.getElementById('section2-calc-input');
+                document.querySelectorAll('input[name="section2Method"]').forEach(radio => {
+                    radio.addEventListener('change', (e) => {
+                        if (e.target.value === 'manual') {
+                            manualInput.classList.remove('hidden');
+                            calcInput.classList.add('hidden');
+                        } else {
+                            manualInput.classList.add('hidden');
+                            calcInput.classList.remove('hidden');
+                        }
+                    });
+                });
+            }
+
+            function setupSummaryCalcMethodToggle() {
+                const specificInputs = document.getElementById('specific-offset-inputs');
+                const intervalInputs = document.getElementById('interval-inputs');
+                document.querySelectorAll('input[name="calcMethod"]').forEach(radio => {
+                    radio.addEventListener('change', (e) => {
+                        if (e.target.value === 'specific') {
+                            specificInputs.classList.remove('hidden');
+                            intervalInputs.classList.add('hidden');
+                        } else {
+                            specificInputs.classList.add('hidden');
+                            intervalInputs.classList.remove('hidden');
+                        }
+                    });
+                });
+            }
+
+            function updateFooterInfo() {
+                const modificationCount = 62;
+                const birthDate = "2025年7月28日 01:05";
+                const infoEl = document.getElementById('footer-info');
+                if (infoEl) {
+                    infoEl.textContent = `此程式經歷 ${modificationCount} 次的修改，於${birthDate}誕生在這個世界上。`;
+                }
+            }
+            
+            // --- 啟動程序 ---
+            initializeFirebase();
+            document.getElementById('processButton').addEventListener('click', processData);
+            document.getElementById('saveButton').addEventListener('click', saveAnalysis);
+            document.getElementById('exportButton').addEventListener('click', exportData);
+            document.getElementById('importButton').addEventListener('click', () => document.getElementById('fileInput').click());
+            document.getElementById('fileInput').addEventListener('change', importData);
+            document.getElementById('mileageSelector').addEventListener('change', updateIndividualDisplay);
+            document.getElementById('summaryButton').addEventListener('click', generateSummaryReport);
+            document.getElementById('sort-by').addEventListener('change', loadSavedAnalyses);
+            setupCollapsibleSections();
+            setupSection2MethodToggle();
+            setupSummaryCalcMethodToggle(); 
+            updateFooterInfo();
+        });
+    </script>
+</body>
+</html>
