@@ -1,0 +1,1777 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>道路測量 DTM 視覺化系統 (IDW + Pro)</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #1e1e1e;
+            --panel-bg: #2d2d2d;
+            --text-color: #e0e0e0;
+            --accent-color: #2563eb;
+            --border-color: #444;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', 'Noto Sans TC', 'Segoe UI', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* 與 AC 工具集共用導覽列搭配：側欄+畫布區包成一列，置於導覽列下方 */
+        .dtm-body {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+            min-height: 0;
+        }
+
+        /* 左側控制面板 */
+        .sidebar {
+            width: 320px;
+            background-color: var(--panel-bg);
+            border-right: 1px solid var(--border-color);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            overflow-y: auto;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.3);
+            z-index: 10;
+        }
+
+        h2 { margin: 0 0 10px 0; font-size: 1.2rem; color: var(--accent-color); border-bottom: 2px solid var(--accent-color); padding-bottom: 5px; }
+        h3 { margin: 10px 0 5px 0; font-size: 0.95rem; color: #aaa; }
+
+        .control-group {
+            background: rgba(0,0,0,0.2);
+            padding: 10px;
+            border-radius: 6px;
+            border: 1px solid var(--border-color);
+        }
+
+        label { display: block; margin-bottom: 5px; font-size: 0.85rem; }
+        
+        .radio-group {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 10px;
+            font-size: 0.85rem;
+            background: #222;
+            padding: 5px;
+            border-radius: 4px;
+        }
+        .radio-group label {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            margin: 0;
+            color: #ddd;
+        }
+        .radio-group input[type="radio"] { width: auto; margin-right: 6px; cursor: pointer; }
+
+        input[type="number"], input[type="text"] {
+            width: 100%;
+            padding: 6px;
+            background: #333;
+            border: 1px solid #555;
+            color: white;
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-family: monospace;
+        }
+        
+        textarea {
+            width: 100%;
+            height: 150px;
+            background: #333;
+            border: 1px solid #555;
+            color: #cfcfcf;
+            font-family: monospace;
+            font-size: 0.8rem;
+            white-space: pre;
+            overflow: auto;
+            resize: vertical;
+            padding: 5px;
+        }
+
+        button {
+            width: 100%;
+            padding: 8px;
+            background-color: var(--accent-color);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background 0.2s;
+        }
+
+        button:hover { background-color: #1d4ed8; }
+        button.secondary { background-color: #555; margin-top: 5px; }
+        button.secondary:hover { background-color: #666; }
+        button.warning { background-color: #d35400; margin-top: 5px; }
+        button.warning:hover { background-color: #e67e22; }
+        button.purple { background-color: #9b59b6; margin-top: 5px; }
+        button.purple:hover { background-color: #8e44ad; }
+        button.success { background-color: #27ae60; margin-top: 5px; }
+        button.success:hover { background-color: #2ecc71; }
+        button.danger { background-color: #c0392b; margin-top: 5px;}
+        button.danger:hover { background-color: #e74c3c; }
+        
+        button.toggle-mode { background-color: #444; border: 1px solid #666; }
+        button.toggle-mode.active { background-color: #e67e22; border-color: #d35400; color: white; }
+
+        .result-box {
+            margin-top: 10px; padding: 10px; background: #111;
+            border: 1px solid #444; border-radius: 4px;
+            font-family: monospace; color: #4cd137;
+        }
+
+        /* 右側畫布區域 */
+        .main-area {
+            flex: 1; position: relative; background-color: #000;
+            display: flex; justify-content: center; align-items: center; overflow: hidden;
+        }
+        canvas#mapCanvas { box-shadow: 0 0 20px rgba(0,0,0,0.5); }
+
+        #tooltip {
+            position: absolute; background: rgba(0, 0, 0, 0.85); color: white;
+            padding: 8px 12px; border-radius: 4px; pointer-events: none; display: none;
+            font-family: monospace; font-size: 0.9rem; border: 1px solid #555;
+            z-index: 20; box-shadow: 2px 2px 10px rgba(0,0,0,0.5); transform: translate(15px, 15px); 
+        }
+
+        .legend {
+            position: absolute; bottom: 20px; right: 20px; background: rgba(45, 45, 45, 0.9);
+            padding: 10px; border-radius: 5px; border: 1px solid #555; font-size: 0.8rem;
+            color: white; z-index: 30;
+        }
+        .gradient-bar { width: 200px; height: 15px; background: linear-gradient(to right, blue, cyan, lime, yellow, red); margin-top: 5px; }
+        .legend-labels { display: flex; justify-content: space-between; margin-top: 2px; }
+
+        .loading {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.8); color: white; padding: 20px; border-radius: 8px; display: none; z-index: 100;
+        }
+
+        .coords-display { display: grid; grid-template-columns: 35px 1fr; gap: 5px; font-size: 0.85rem; margin-bottom: 5px; align-items: center;}
+        .coords-display span:first-child { color: #888; text-align: right;}
+
+        /* 橫斷面圖表區塊 */
+        .profile-panel {
+            position: absolute; bottom: 0; left: 0; right: 0; height: 350px;
+            background: rgba(30, 30, 30, 0.95); border-top: 2px solid var(--accent-color);
+            z-index: 50; display: none; flex-direction: column; padding: 10px 20px; box-shadow: 0 -5px 15px rgba(0,0,0,0.5);
+        }
+        .profile-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; color: var(--accent-color); font-weight: bold; }
+        .close-btn { background: none; border: none; color: #aaa; font-size: 1.5rem; cursor: pointer; padding: 0; width: auto; }
+        .close-btn:hover { color: white; }
+        .chart-container { flex: 1; position: relative; width: 100%; overflow: hidden; }
+
+        /* Modal 樣式 */
+        .modal { display: none; position: fixed; z-index: 200; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.7); }
+        .modal-content {
+            background-color: var(--panel-bg); margin: 5% auto; padding: 20px; border: 1px solid #555;
+            width: 50%; max-width: 500px; border-radius: 8px; color: #e0e0e0; max-height: 90vh; display: flex; flex-direction: column;
+        }
+        #allSectionsModal .modal-content { width: 95%; max-width: 1400px; height: 95%; margin: 1% auto; }
+        .modal-header { font-size: 1.2rem; margin-bottom: 15px; color: var(--accent-color); font-weight: bold; flex-shrink: 0;}
+        .modal-footer { margin-top: 15px; display: flex; justify-content: flex-end; gap: 10px; flex-shrink: 0;}
+        .modal-footer button { width: auto; padding: 8px 20px; }
+        
+        .batch-input-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+        .batch-input-row div { display: flex; flex-direction: column; }
+        .batch-input-row label { font-size: 0.8rem; color: #aaa; margin-bottom: 3px; }
+
+        /* 樁號列表面板 */
+        .station-list-panel {
+            position: absolute; top: 20px; right: 20px; width: 180px; max-height: calc(100vh - 380px);
+            background-color: rgba(45, 45, 45, 0.95); border: 1px solid #555; border-radius: 5px;
+            display: none; flex-direction: column; z-index: 40; box-shadow: -2px 2px 10px rgba(0,0,0,0.5);
+        }
+        .station-header { padding: 10px; background: #333; color: var(--accent-color); font-weight: bold; border-bottom: 1px solid #555; display: flex; justify-content: space-between; align-items: center; }
+        .station-list { overflow-y: auto; flex: 1; }
+        .station-item { padding: 8px 12px; cursor: pointer; font-family: monospace; border-bottom: 1px solid #444; transition: background 0.1s; }
+        .station-item:hover { background-color: #444; }
+        .station-item.active { background-color: var(--accent-color); color: white; }
+
+        /* 專案管理列表 */
+        .project-list { max-height: 300px; overflow-y: auto; border: 1px solid #555; border-radius: 4px; background: #1a1a1a; margin-top: 10px; }
+        .project-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #333; }
+        .project-item:last-child { border-bottom: none; }
+        .project-item:hover { background: #2a2a2a; }
+        .project-info { display: flex; flex-direction: column; }
+        .project-name { font-weight: bold; font-size: 1rem; color: var(--accent-color); }
+        .project-date { font-size: 0.75rem; color: #888; }
+        .project-actions button { width: auto; padding: 4px 8px; font-size: 0.8rem; margin-left: 5px; }
+
+        /* 全部斷面顯示 Grid (放大且清晰) */
+        .batch-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(450px, 1fr)); gap: 20px; padding: 15px; overflow-y: auto; flex: 1; background: #111; border: 1px solid #333; }
+        .batch-card { background: #222; border: 1px solid #444; border-radius: 6px; padding: 10px; display: flex; flex-direction: column; }
+        .batch-card h4 { margin: 0 0 10px 0; color: var(--accent-color); font-size: 1rem; text-align: center; font-family: monospace; }
+        .batch-card canvas { width: 100%; height: 250px; background: #000; cursor: pointer; border-radius: 4px; }
+    </style>
+</head>
+<body>
+
+    <div class="dtm-body">
+    <!-- 左側面板 -->
+    <div class="sidebar">
+        <h2>道路測量 DTM 系統</h2>
+
+        <div class="control-group" style="border-left: 3px solid #2ecc71;">
+            <h3>💾 檔案與存檔管理</h3>
+            <div style="font-size:0.75rem; color:#f1c40f; margin-bottom:5px;" id="autoSaveStatus">狀態：初始化中...</div>
+            <div style="display: flex; gap: 5px;">
+                <button class="success" onclick="app.promptSaveProject()">另存新專案</button>
+                <button class="secondary" onclick="app.openProjectManager()">專案管理</button>
+            </div>
+        </div>
+        
+        <div class="control-group">
+            <h3>資料輸入</h3>
+            <div class="radio-group">
+                <label title="第2欄為北(Y)，第3欄為東(X)">
+                    <input type="radio" name="coordFormat" value="nez" checked onchange="app.triggerAutoSave(); app.loadData();"> NEZ (北,東,高)
+                </label>
+                <label title="第2欄為東(X)，第3欄為北(Y)">
+                    <input type="radio" name="coordFormat" value="xyz" onchange="app.triggerAutoSave(); app.loadData();"> XYZ (東,北,高)
+                </label>
+            </div>
+
+            <textarea id="inputData" placeholder="1 2705664.491 186194.696 12.672..." oninput="app.triggerAutoSave()"></textarea>
+            <button onclick="app.loadData()">重新繪製地圖</button>
+            <div style="font-size:0.75rem; color:#888; margin-top:5px;">
+                目前點數: <span id="pointCount">0</span>
+            </div>
+        </div>
+
+        <div class="control-group" style="border-left: 3px solid var(--accent-color);">
+            <h3>🛣️ 道路參數設定</h3>
+            <div class="coords-display">
+                <span>起點:</span> 
+                <div style="display:flex; align-items:center;">
+                    <span style="color:white; margin-right:5px;">0K+</span>
+                    <input type="number" id="startStation" value="0" placeholder="0" onchange="app.triggerAutoSave(); app.render();">
+                </div>
+            </div>
+            <div class="coords-display" style="margin-top: 5px;">
+                <span>左寬:</span> <input type="number" id="mainLeftWidth" value="4.5" onchange="app.triggerAutoSave(); app.render();">
+                <span style="text-align:right;">右寬:</span> <input type="number" id="mainRightWidth" value="4.5" onchange="app.triggerAutoSave(); app.render();">
+            </div>
+            <div class="coords-display" style="margin-top: 5px;">
+                <span>Z軸範圍:</span> 
+                <div style="display:flex; align-items:center;">
+                    <input type="number" id="profileZRange" value="0.2" step="0.1" min="0" onchange="app.triggerAutoSave(); app.generateProfile(); if(document.getElementById('allSectionsModal').style.display==='block') app.showAllSections();">
+                    <span style="margin-left:5px;">m</span>
+                </div>
+            </div>
+            <div style="font-size:0.7rem; color:#aaa; margin-top:5px;">
+                * 設定 0.2 代表固定顯示 20cm 範圍，設 0 則自動縮放。<br>
+                * 匯入中心線後，只會在設定的左右路寬內進行內插計算。
+            </div>
+        </div>
+
+        <div class="control-group">
+            <h3>工程功能</h3>
+            <button class="purple" onclick="document.getElementById('cadModal').style.display='block'">
+                📋 匯入/編輯 CAD 中心線
+            </button>
+            <button class="success" onclick="app.openBatchModal()">
+                ⚡ 批量生成橫斷面
+            </button>
+            <button id="btnSectionMode" class="toggle-mode" onclick="app.toggleSectionMode()" style="margin-top: 5px;">
+                ✏️ 手動繪製橫斷面
+            </button>
+        </div>
+
+        <div class="control-group">
+            <h3>顯示與其他參數</h3>
+            <label>
+                IDW 冪次 (Power):
+                <input type="number" id="idwPower" value="2" step="0.5" min="0.5" max="20" onchange="app.triggerAutoSave(); app.render();">
+            </label>
+            
+            <label style="margin-top: 10px;">
+                點位裁切半徑 (Mask, m):
+                <input type="number" id="maskRadius" value="20" step="1" min="0" onchange="app.triggerAutoSave(); app.render();">
+            </label>
+
+            <label style="display:flex; align-items:center; margin-top: 10px;">
+                <input type="checkbox" id="showPoints" checked onchange="app.triggerAutoSave(); app.render();"> 顯示測點
+            </label>
+            <label style="display:flex; align-items:center;">
+                <input type="checkbox" id="showGrid" onchange="app.triggerAutoSave(); app.render();"> 顯示網格線
+            </label>
+            
+            <button class="warning" onclick="app.resetView()">重置視圖 (Fit All)</button>
+        </div>
+    </div>
+
+    <div class="main-area" id="canvasContainer">
+        <canvas id="mapCanvas"></canvas>
+        
+        <div id="profilePanel" class="profile-panel">
+            <div class="profile-header">
+                <span id="profileTitle">橫斷面預覽 (Profile View)</span>
+                <button class="close-btn" onclick="app.closeProfile()">×</button>
+            </div>
+            <div class="chart-container" id="chartContainer">
+                <canvas id="profileCanvas"></canvas>
+            </div>
+        </div>
+
+        <div id="stationListPanel" class="station-list-panel">
+            <div class="station-header">
+                <span>樁號列表</span>
+                <div style="display:flex; gap:5px;">
+                    <button class="success" style="font-size:0.8rem; padding: 2px 6px;" onclick="app.showAllSections()">全部</button>
+                    <button class="close-btn" style="font-size:1.2rem;" onclick="document.getElementById('stationListPanel').style.display='none'">×</button>
+                </div>
+            </div>
+            <div class="station-list" id="stationListContent"></div>
+        </div>
+
+        <div id="tooltip"></div>
+        <div id="loading" class="loading">計算中...</div>
+        
+        <div class="legend">
+            <div>高程圖例 (m) - 當前視圖</div>
+            <div class="gradient-bar"></div>
+            <div class="legend-labels">
+                <span id="legendMin">29.0</span>
+                <span id="legendMax">31.0</span>
+            </div>
+        </div>
+    </div>
+    </div><!-- /.dtm-body -->
+
+    <!-- Modals -->
+    <div id="cadModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">匯入 CAD 中心線 (LIST 指令)</div>
+            <div>請將 AutoCAD 中對 Polyline 使用 LIST 指令的結果完整貼在下方：</div>
+            <textarea id="cadInput" oninput="app.triggerAutoSave()" placeholder="在點 X=... Y=... Z= 0.000" style="height: 200px; margin-top: 10px;"></textarea>
+            <div class="modal-footer">
+                <button class="secondary" onclick="document.getElementById('cadModal').style.display='none'">取消</button>
+                <button class="danger" onclick="document.getElementById('cadInput').value=''; app.importedCenterline=[]; app.updateCenterlineBounds(); app.render(); app.triggerAutoSave(); document.getElementById('cadModal').style.display='none'">清除中心線</button>
+                <button class="purple" onclick="app.importCADList()">匯入並繪製</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="batchModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">批量生成橫斷面</div>
+            <div class="batch-input-row">
+                <div><label>樁號間距 (Interval)</label><input type="number" id="batchInterval" value="20" min="1"></div>
+                <div style="grid-column: span 2;">
+                    <label style="color:#e74c3c;">* 將自動使用主畫面設定的「起點」、「左寬」與「右寬」。</label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="secondary" onclick="document.getElementById('batchModal').style.display='none'">取消</button>
+                <button class="success" onclick="app.batchGenerateSections()">開始生成</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="allSectionsModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">所有橫斷面一覽<button class="close-btn" style="float:right;" onclick="document.getElementById('allSectionsModal').style.display='none'">×</button></div>
+            <div class="batch-grid" id="allSectionsGrid"></div>
+            <div class="modal-footer"><button class="secondary" onclick="document.getElementById('allSectionsModal').style.display='none'">關閉</button></div>
+        </div>
+    </div>
+
+    <div id="projectModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">專案管理</div>
+            <div>你可以在此載入、重新命名或刪除已儲存的專案。</div>
+            <div class="project-list" id="projectListContainer"></div>
+            <div class="modal-footer">
+                <button class="secondary" onclick="document.getElementById('projectModal').style.display='none'">關閉</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 自訂對話框 Generic Modal -->
+    <div id="genericModal" class="modal" style="z-index: 300;">
+        <div class="modal-content" style="width: 350px; max-width: 90%; margin: 15% auto;">
+            <div class="modal-header" id="genericModalTitle">提示</div>
+            <div id="genericModalMessage" style="margin-bottom: 15px; color:#ddd; font-size:0.9rem; line-height:1.4;"></div>
+            <input type="text" id="genericModalInput" style="display:none; margin-bottom: 15px;">
+            <div class="modal-footer">
+                <button class="secondary" id="genericModalCancel" onclick="app.closeGenericModal()">取消</button>
+                <button class="success" id="genericModalConfirm">確定</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const DEFAULT_DATA = `1	2705664.491	186194.696	12.672
+2	2705663.468	186194.769	12.721
+3	2705658.51	186193.704	12.887
+4	2705662.112	186196.778	12.799
+5	2705660.441	186199.549	12.797
+6	2705657.368	186201.62	12.89
+7	2705655.531	186203.494	12.887
+8	2705665.658	186203.162	12.718
+9	2705665.518	186203.181	12.787
+10	2705662.773	186204.164	12.829
+11	2705659.238	186205.632	12.914
+12	2705657.099	186206.899	12.928
+13	2705655.171	186208.393	12.928
+14	2705666.582	186207.461	12.81
+15	2705666.454	186207.506	12.836
+16	2705664.293	186208.178	12.851
+17	2705661.961	186209.054	12.886
+18	2705659.511	186209.908	12.953
+19	2705657.069	186210.841	12.955
+20	2705654.972	186211.909	12.943
+21	2705667.829	186213.191	12.848
+22	2705667.633	186213.287	12.858
+23	2705665.274	186214.109	12.896
+24	2705662.624	186215.248	12.917
+25	2705660.321	186216.183	12.987
+26	2705657.458	186217.229	12.943
+27	2705654.629	186218.518	12.889
+28	2705669.046	186218.334	12.836
+29	2705668.944	186218.383	12.885
+30	2705666.256	186219.153	12.953
+31	2705663.554	186220.207	12.941
+32	2705660.617	186221.395	12.98
+33	2705658.311	186222.254	12.924
+34	2705655.437	186224.183	12.893
+35	2705655.321	186224.215	12.957
+36	2705670.267	186224.085	12.882
+37	2705670.199	186224.109	12.935
+38	2705667.562	186224.942	12.982
+39	2705665.178	186225.994	12.95
+40	2705662.573	186226.797	12.987
+41	2705660.412	186227.51	12.947
+42	2705657.539	186228.597	12.928
+43	2705657.434	186228.63	12.981
+44	2705671.224	186228.562	13.033
+45	2705671.165	186228.568	13.042
+46	2705668.528	186229.454	13.06
+47	2705665.624	186230.509	13.051
+48	2705662.422	186231.93	13.059
+49	2705659.396	186233.113	13.019
+50	2705659.32	186233.162	13.087
+51	2705672.364	186233.937	13.123
+52	2705672.298	186233.983	13.123
+53	2705669.657	186234.507	13.119
+54	2705666.282	186235.504	13.144
+55	2705663.949	186236.397	13.132
+56	2705661.077	186237.417	13.09
+57	2705660.931	186237.466	13.157
+58	2705670.872	186239.407	13.095
+59	2705673.089	186238.91	13.088
+60	2705667.691	186240.285	13.095
+61	2705664.814	186241.395	13.106
+62	2705662.868	186242.202	13.075
+63	2705662.775	186242.22	13.139
+64	2705674.015	186243.895	13.077
+65	2705672.133	186244.479	13.059
+66	2705669.214	186245.463	13.035
+67	2705666.218	186246.289	13.084
+68	2705664.564	186246.906	13.076
+69	2705664.486	186246.917	13.114
+70	2705654.913	186198.113	12.93
+71	2705651.226	186202.827	12.91
+72	2705651.937	186206.253	12.888
+73	2705652.226	186209.963	12.921
+74	2705652.135	186213.427	12.93
+75	2705676.197	186249.753	13.0325
+76	2705676.112	186249.754	13.0535
+77	2705673.356	186250.71	13.0395
+78	2705670.431	186251.671	13.0325
+79	2705670.433	186251.699	13.0325
+80	2705667.976	186252.461	13.0985
+81	2705666.116	186252.903	13.0665
+82	2705666.032	186252.979	13.1105
+83	2705677.092	186253.383	12.948
+84	2705677.029	186253.4	12.988
+85	2705674.482	186254.527	12.98
+86	2705671.237	186255.645	13.003
+87	2705668.701	186256.478	13.02
+88	2705667.257	186257.034	13.019
+89	2705667.198	186257.072	13.073
+90	2705678.777	186259.7	12.966
+91	2705678.696	186259.728	12.973
+92	2705676.404	186261.046	12.946
+93	2705673.613	186262.282	12.959
+94	2705671.236	186263.247	12.989
+95	2705669.463	186263.912	12.91
+96	2705669.407	186263.934	12.966
+97	2705679.775	186263.457	12.959
+98	2705679.748	186263.477	12.973
+99	2705677.428	186264.33	12.957
+100	2705674.461	186265.636	12.968
+101	2705671.813	186266.617	12.954
+102	2705670.392	186267.062	12.903
+103	2705670.323	186267.103	12.954
+104	2705682.003	186270.406	12.888
+105	2705681.889	186270.443	12.921
+106	2705679.568	186271.424	12.956
+107	2705676.566	186272.564	12.96
+108	2705674.014	186273.535	12.958
+109	2705672.523	186274.115	12.928
+110	2705672.414	186274.143	12.974
+111	2705683.87	186276.193	12.97
+112	2705683.728	186276.211	12.993
+113	2705681.286	186277.211	12.999
+114	2705678.492	186278.063	13.004
+115	2705675.919	186278.942	13.031
+116	2705674.09	186279.501	13.005
+117	2705673.97	186279.54	13.053
+118	2705685.627	186281.77	12.986
+119	2705685.539	186281.823	13.001
+120	2705683.119	186282.904	13.018
+121	2705681.029	186283.921	12.966
+122	2705678.071	186285.019	12.987
+123	2705675.975	186285.682	12.996
+124	2705675.938	186285.68	13.059
+125	2705689.214	186291.108	12.949
+126	2705689.103	186291.165	12.962
+127	2705686.145	186292.245	13.012
+128	2705682.692	186293.665	12.948
+129	2705680.3	186294.405	12.966
+130	2705679.011	186294.817	12.967
+131	2705678.971	186294.863	13.014
+132	2705692.183	186300.672	12.942
+133	2705692.085	186300.741	12.975
+134	2705689.516	186301.637	12.986
+135	2705686.903	186302.603	12.901
+136	2705684.062	186303.787	12.9
+137	2705682.22	186304.508	12.881
+138	2705682.155	186304.561	12.923
+139	2705695.439	186310.129	12.851
+140	2705695.392	186310.165	12.898
+141	2705692.888	186311.073	12.888
+142	2705689.515	186312.416	12.844
+143	2705687.172	186313.414	12.855
+144	2705685.522	186314.062	12.854
+145	2705685.448	186314.1	12.927
+146	2705699.017	186319.312	12.763
+147	2705698.868	186319.384	12.778
+148	2705696.031	186320.132	12.836
+149	2705692.979	186320.938	12.795
+150	2705690.052	186321.618	12.802
+151	2705688.258	186321.995	12.773
+152	2705688.169	186322.041	12.848
+153	2705702.247	186328.696	12.778
+154	2705702.157	186328.737	12.772
+155	2705698.976	186329.754	12.804
+156	2705695.687	186330.753	12.797
+157	2705693.462	186331.53	12.772
+158	2705691.702	186332.193	12.727
+159	2705691.659	186332.228	12.808
+160	2705705.27	186338.546	12.675
+161	2705705.193	186338.558	12.698
+162	2705702.371	186339.594	12.751
+163	2705699.285	186340.553	12.716
+164	2705696.924	186341.17	12.728
+165	2705695.053	186341.929	12.697
+166	2705695.029	186341.947	12.767
+167	2705708.931	186349.141	12.697
+168	2705708.869	186349.183	12.718
+169	2705706.381	186350.269	12.702
+170	2705703.68	186351.285	12.647
+171	2705700.936	186352.157	12.651
+172	2705698.861	186352.866	12.595
+173	2705698.76	186352.894	12.658
+174	2705711.865	186357.479	12.698
+175	2705711.784	186357.489	12.71
+176	2705708.933	186358.459	12.763
+177	2705705.77	186359.596	12.666
+178	2705703.409	186360.343	12.682
+179	2705701.722	186361.013	12.646
+180	2705701.623	186361.033	12.72
+181	2705715.174	186366.803	12.75
+182	2705715.132	186366.82	12.75
+183	2705712.231	186367.883	12.784
+184	2705709.566	186368.821	12.687
+185	2705707.339	186369.433	12.676
+186	2705704.895	186370.151	12.64
+187	2705704.852	186370.19	12.709
+188	2705718.53	186376.318	12.732
+189	2705718.475	186376.295	12.751
+190	2705715.635	186377.343	12.782
+191	2705713.098	186378.171	12.653
+192	2705710.354	186379.079	12.668
+193	2705708.359	186379.819	12.656
+194	2705708.276	186379.884	12.714
+1001	2705673.819	186210.948	12.6616
+1002	2705654.886	186198.07	12.945
+1003	2705648.71	186205.761	12.886
+1004	2705647.238	186207.829	12.872
+1005	2705643.767	186212.616	12.732
+1006	2705643.676	186212.666	12.749
+1007	2705649.5	186211.756	12.867
+1008	2705647.247	186214.034	12.797
+1009	2705649.58	186215.74	12.896
+1010	2705649.539	186215.791	12.95
+1011	2705652.601	186219.51	12.964
+1012	2705652.565	186219.55	13.028
+2001	2705721.849	186385.702	12.68
+2002	2705721.798	186385.653	12.706
+2003	2705718.933	186386.706	12.75
+2004	2705716.441	186387.973	12.665
+2005	2705713.776	186388.843	12.671
+2006	2705711.802	186389.584	12.602
+2007	2705711.727	186389.631	12.667
+2008	2705725.187	186395.054	12.635
+2009	2705725.154	186395.086	12.634
+2010	2705722.287	186396.163	12.681
+2011	2705719.87	186397.21	12.592
+2012	2705716.886	186398.522	12.584
+2013	2705715.194	186399.109	12.547
+2014	2705715.125	186399.108	12.608
+2015	2705728.506	186404.449	12.606
+2016	2705728.43	186404.493	12.612
+2017	2705725.567	186405.337	12.615
+2018	2705723.403	186406.239	12.579
+2019	2705720.802	186407.278	12.568
+2020	2705718.578	186408.149	12.558
+2021	2705718.517	186408.201	12.595
+2022	2705731.867	186413.893	12.574
+2023	2705731.797	186413.897	12.592
+2024	2705729.026	186415.069	12.597
+2025	2705726.142	186416.017	12.563
+2026	2705723.886	186416.958	12.579
+2027	2705721.897	186417.579	12.551
+2028	2705721.854	186417.587	12.614
+2029	2705735.093	186423.295	12.471
+2030	2705735.046	186423.329	12.495
+2031	2705732.265	186424.275	12.531
+2032	2705729.724	186425.276	12.5
+2033	2705727.205	186426.167	12.514
+2034	2705725.191	186426.829	12.487
+2035	2705725.164	186426.846	12.567
+2036	2705738.471	186432.645	12.425
+2037	2705738.373	186432.694	12.425
+2038	2705735.616	186433.668	12.456
+2039	2705733.125	186434.572	12.419
+2040	2705730.434	186435.509	12.418
+2041	2705728.51	186436.081	12.398
+2042	2705728.444	186436.143	12.448
+2043	2705741.861	186442.214	12.305
+2044	2705741.784	186442.159	12.307
+2045	2705739.027	186443.31	12.343
+2046	2705736.52	186444.311	12.292
+2047	2705734.061	186445.243	12.283
+2048	2705732.014	186445.975	12.272
+2049	2705731.956	186445.992	12.323
+2050	2705745.161	186451.595	12.221
+2051	2705745.06	186451.555	12.223
+2052	2705742.34	186452.713	12.212
+2053	2705739.973	186453.642	12.179
+2054	2705737.312	186454.552	12.177
+2055	2705735.278	186455.115	12.18
+2056	2705735.239	186455.153	12.232
+2057	2705748.485	186461.066	12.067
+2058	2705748.41	186461.104	12.081
+2059	2705745.576	186461.906	12.084
+2060	2705742.768	186462.954	12.058
+2061	2705740.337	186463.694	12.079
+2062	2705738.964	186463.879	12.083
+2063	2705738.881	186463.923	12.127
+2064	2705748.899	186471.737	12.004
+2065	2705751.807	186470.581	11.905
+2066	2705746.581	186472.547	11.969
+2067	2705743.848	186473.372	11.972
+2068	2705741.722	186473.902	11.976
+2069	2705741.666	186473.953	12.035
+2100	2705755.153	186479.98	11.869
+2101	2705755.085	186480.033	11.869
+2102	2705752.411	186480.946	11.945
+2103	2705749.944	186481.809	11.888
+2104	2705747.59	186482.591	11.871
+2105	2705745.136	186483.524	11.853
+2106	2705745.067	186483.57	11.902
+2107	2705758.537	186489.387	11.741
+2108	2705758.48	186489.398	11.782
+2109	2705755.906	186490.385	11.832
+2110	2705753.4	186491.332	11.77
+2111	2705750.645	186492.127	11.765
+2112	2705748.555	186492.929	11.75
+2113	2705748.499	186492.953	11.807
+2114	2705761.868	186498.793	11.605
+2115	2705761.785	186498.834	11.635
+2116	2705759.172	186499.766	11.704
+2117	2705756.673	186500.617	11.623
+2118	2705753.965	186501.552	11.638
+2119	2705751.845	186502.31	11.64
+2120	2705751.776	186502.333	11.7
+2121	2705765.259	186508.289	11.477
+2122	2705765.187	186508.308	11.501
+2123	2705762.724	186509.206	11.573
+2124	2705760.228	186510.109	11.484
+2125	2705757.711	186511.025	11.49
+2126	2705755.359	186512.016	11.473
+2127	2705755.281	186512.036	11.525
+2128	2705769.275	186516.952	11.252
+2129	2705769.205	186516.932	11.308
+2130	2705766.055	186518.39	11.374
+2131	2705763.673	186519.175	11.35
+2132	2705761.239	186519.994	11.34
+2133	2705758.591	186520.868	11.308
+2134	2705758.513	186520.886	11.327
+2135	2705775.012	186525.853	11.146
+2136	2705774.938	186525.845	11.17
+2137	2705772.027	186527.049	11.179
+2138	2705769.192	186528.139	11.189
+2139	2705767.164	186528.868	11.125
+2140	2705764.474	186529.749	11.12
+2141	2705761.95	186530.855	11.096
+2142	2705761.88	186530.887	11.132
+2143	2705778.512	186535.298	10.89
+2144	2705778.338	186535.451	10.913
+2145	2705775.503	186536.386	10.933
+2146	2705772.532	186537.292	10.935
+2147	2705770.257	186538.135	10.882
+2148	2705767.674	186539.088	10.893
+2149	2705765.245	186540.084	10.876
+2150	2705765.197	186540.087	10.937
+2151	2705780.168	186545.218	10.675
+2152	2705780.087	186545.201	10.676
+2153	2705777.729	186545.825	10.703
+2154	2705775.868	186546.493	10.687
+2155	2705773.59	186547.318	10.64
+2156	2705770.961	186548.282	10.641
+2157	2705768.503	186549.177	10.621
+2158	2705768.446	186549.181	10.68
+2159	2705782.649	186554.766	10.501
+2160	2705782.548	186554.839	10.507
+2161	2705779.431	186556.306	10.415
+2162	2705777.196	186556.988	10.347
+2163	2705774.883	186557.902	10.372
+2164	2705772.718	186559.015	10.374
+2165	2705772.681	186559.054	10.419
+2166	2705785.223	186564.879	10.194
+2167	2705782.922	186565.706	10.113
+2168	2705780.661	186566.637	10.007
+2169	2705778.147	186567.556	9.999
+2170	2705775.517	186568.552	9.976
+2171	2705775.459	186568.63	10.018
+2172	2705788.587	186574.183	9.679
+2173	2705788.623	186574.253	9.581
+2174	2705786.297	186574.775	9.629
+2175	2705783.798	186575.703	9.562
+2176	2705780.991	186576.685	9.549
+2177	2705778.839	186577.601	9.488
+2178	2705778.719	186577.628	9.547
+3001	2705792.003	186583.592	9.015
+3002	2705791.958	186583.627	9.049
+3003	2705789.471	186584.519	9.065
+3004	2705786.789	186585.712	8.982
+3005	2705784.154	186586.702	8.968
+3006	2705782.252	186587.363	8.95
+3007	2705782.216	186587.368	9.003
+3008	2705795.34	186593.004	8.555
+3009	2705795.301	186593.028	8.584
+3010	2705792.801	186593.906	8.618
+3011	2705789.824	186595.043	8.518
+3012	2705787.436	186595.84	8.509
+3013	2705785.393	186596.435	8.439
+3014	2705785.333	186596.466	8.487
+3015	2705799.329	186602.325	8.362
+3016	2705799.234	186602.378	8.372
+3017	2705796.236	186603.351	8.425
+3018	2705793.609	186604.41	8.344
+3019	2705791.013	186605.402	8.35
+3020	2705788.589	186606.323	8.322
+3021	2705788.568	186606.354	8.379
+3022	2705803.062	186611.598	8.185
+3023	2705803.025	186611.614	8.179
+3024	2705799.456	186612.886	8.244
+3025	2705796.649	186613.995	8.123
+3026	2705794.211	186614.946	8.115
+3027	2705792.302	186615.593	8.17
+3028	2705792.27	186615.62	8.21
+3029	2705805.424	186621.323	8.06
+3030	2705805.351	186621.346	8.074
+3031	2705802.944	186622.205	8.105
+3032	2705800.08	186623.192	8.097
+3033	2705797.448	186624.089	8.079
+3034	2705795.553	186624.731	8.096
+3035	2705795.517	186624.766	8.161
+3036	2705808.721	186630.712	7.969
+3037	2705808.673	186630.755	7.987
+3038	2705806.27	186631.564	8.033
+3039	2705803.579	186632.283	8.016
+3040	2705801.142	186633.149	8.02
+3041	2705798.762	186633.856	8.019
+3042	2705798.676	186633.875	8.056
+3043	2705812.199	186640.306	7.928
+3044	2705812.121	186640.326	7.968
+3045	2705809.597	186641.167	7.993
+3046	2705806.989	186642.043	7.959
+3047	2705804.281	186642.879	7.962
+3048	2705802.205	186643.628	7.972
+3049	2705802.173	186643.644	7.991
+3050	2705815.467	186649.606	7.936
+3051	2705815.427	186649.61	7.964
+3052	2705812.814	186650.535	7.992
+3053	2705810.141	186651.273	7.972
+3054	2705807.449	186652.082	8.017
+3055	2705805.47	186652.786	8.006
+3056	2705805.399	186652.784	8.059
+3057	2705818.848	186659.114	8.01
+3058	2705818.783	186659.128	8.039
+3059	2705816.176	186660.056	8.059
+3060	2705813.482	186660.868	8.066
+3061	2705810.953	186661.655	8.092
+3062	2705808.896	186662.347	8.065
+3063	2705808.843	186662.355	8.137
+3064	2705822.156	186668.462	7.997
+3065	2705822.095	186668.482	8.034
+3066	2705819.485	186669.394	8.134
+3067	2705816.728	186670.172	8.106
+3068	2705814.648	186670.84	8.103
+3069	2705812.209	186671.673	8.117
+3070	2705812.153	186671.698	8.184
+3071	2705825.507	186677.949	8.063
+3072	2705825.473	186677.956	8.1
+3073	2705822.812	186678.725	8.179
+3074	2705820.251	186679.548	8.094
+3075	2705817.759	186680.298	8.106
+3076	2705815.439	186680.996	8.099
+3077	2705815.4	186681.013	8.157
+3078	2705828.889	186687.385	8.079
+3079	2705828.797	186687.42	8.117
+3080	2705826.171	186688.185	8.196
+3081	2705823.596	186689.109	8.132
+3082	2705821.161	186689.833	8.112
+3083	2705818.93	186690.568	8.088
+3084	2705818.884	186690.573	8.122
+3085	2705832.2	186696.742	8.094
+3086	2705832.165	186696.743	8.129
+3087	2705829.497	186697.515	8.168
+3088	2705826.793	186698.376	8.109
+3089	2705824.519	186699.099	8.105
+3090	2705822.28	186699.953	8.093
+3091	2705822.231	186699.981	8.135
+3092	2705835.538	186706.248	8.054
+3093	2705835.496	186706.254	8.087
+3094	2705832.871	186707.02	8.12
+3095	2705830.128	186707.773	8.066
+3096	2705827.786	186708.475	8.066
+3097	2705825.564	186709.182	8.029
+3098	2705825.517	186709.219	8.093
+3099	2705838.906	186715.638	7.999
+3100	2705838.824	186715.654	8.023
+3101	2705836.171	186716.585	8.064
+3102	2705833.737	186717.391	8.113
+3103	2705831.028	186718.312	8.091
+3104	2705828.17	186718.96	8.044
+3105	2705828.093	186719.066	8.039
+3106	2705842.112	186724.914	8.091
+3106	2705824.136	186721.388	7.906
+3107	2705842.02	186724.934	7.957
+3108	2705839.535	186725.734	7.994
+3109	2705837.235	186726.431	8.052
+3110	2705835.002	186727.134	8.066
+3111	2705832.647	186727.907	8.042
+3112	2705827.581	186728.975	7.982`;
+
+        const DEFAULT_CAD_DATA = `在點  X=186186.342  Y=2705656.425  Z=    0.000
+在點  X=186262.501  Y=2705673.422  Z=    0.000
+在點  X=186352.277  Y=2705704.735  Z=    0.000
+在點  X=186540.685  Y=2705771.711  Z=    0.000
+在點  X=186729.143  Y=2705838.867  Z=    0.000
+在點  X=186744.817  Y=2705844.410  Z=    0.000`;
+
+        class TerrainMap {
+            constructor() {
+                this.canvas = document.getElementById('mapCanvas');
+                this.ctx = this.canvas.getContext('2d');
+                this.container = document.getElementById('canvasContainer');
+                
+                this.points = [];
+                this.bounds = { minX: 0, maxX: 0, minY: 0, maxY: 0, minZ: 0, maxZ: 0 };
+                this.renderMinZ = 0;
+                this.renderMaxZ = 0;
+                this.scale = 1;
+                this.offsetX = 0;
+                this.offsetY = 0;
+                
+                this.uiMode = 'pan';
+                this.sectionStart = null;
+                this.sectionEnd = null;
+                
+                this.importedCenterline = []; 
+                this.clBounds = null; // 中心線 Bounding Box 加速用
+                this.batchSections = []; 
+
+                this.isDragging = false;
+                this.lastMouse = { x: 0, y: 0 };
+                this.renderTimer = null; 
+                this.autoSaveTimer = null;
+
+                this.resize();
+                window.addEventListener('resize', () => { this.resize(); this.render(); });
+                this.canvas.addEventListener('mousedown', this.handleMouseDown.bind(this));
+                window.addEventListener('mouseup', this.handleMouseUp.bind(this));
+                this.canvas.addEventListener('mousemove', this.handleMouseMove.bind(this));
+                this.canvas.addEventListener('wheel', this.handleWheel.bind(this), { passive: false });
+                this.canvas.addEventListener('mouseleave', () => { document.getElementById('tooltip').style.display = 'none'; });
+            }
+
+            // === 存檔與狀態管理 ===
+            getCurrentState() {
+                return {
+                    data: document.getElementById('inputData').value,
+                    format: document.querySelector('input[name="coordFormat"]:checked').value,
+                    cadText: document.getElementById('cadInput').value,
+                    startStation: document.getElementById('startStation').value,
+                    mainLeftWidth: document.getElementById('mainLeftWidth').value,
+                    mainRightWidth: document.getElementById('mainRightWidth').value,
+                    profileZRange: document.getElementById('profileZRange').value,
+                    power: document.getElementById('idwPower').value,
+                    mask: document.getElementById('maskRadius').value,
+                    showPoints: document.getElementById('showPoints').checked,
+                    showGrid: document.getElementById('showGrid').checked
+                };
+            }
+
+            restoreState(state) {
+                if(!state) return;
+                document.getElementById('inputData').value = state.data || '';
+                const formatRadios = document.getElementsByName('coordFormat');
+                for(let r of formatRadios) { if(r.value === (state.format || 'nez')) r.checked = true; }
+                document.getElementById('cadInput').value = state.cadText || '';
+                document.getElementById('startStation').value = state.startStation || 0;
+                document.getElementById('mainLeftWidth').value = state.mainLeftWidth || 4.5;
+                document.getElementById('mainRightWidth').value = state.mainRightWidth || 4.5;
+                document.getElementById('profileZRange').value = state.profileZRange || 0.2;
+                document.getElementById('idwPower').value = state.power || 2;
+                document.getElementById('maskRadius').value = state.mask || 20;
+                document.getElementById('showPoints').checked = state.showPoints !== false; 
+                document.getElementById('showGrid').checked = state.showGrid === true;
+                
+                this.parseData(); 
+                if(state.cadText) { this.importCADList(true); }
+            }
+
+            triggerAutoSave() {
+                const status = document.getElementById('autoSaveStatus');
+                if(status) status.innerText = "狀態：存檔中...";
+                if(this.autoSaveTimer) clearTimeout(this.autoSaveTimer);
+                this.autoSaveTimer = setTimeout(() => { this.saveToAutoSave(); }, 1500); 
+            }
+
+            saveToAutoSave() {
+                try {
+                    localStorage.setItem('dtm_autosave', JSON.stringify(this.getCurrentState()));
+                    const status = document.getElementById('autoSaveStatus');
+                    if(status) status.innerText = `狀態：已自動存檔 (${new Date().toLocaleTimeString()})`;
+                } catch(e) {
+                    const status = document.getElementById('autoSaveStatus');
+                    if(status) status.innerText = "狀態：存檔失敗 (空間不足)";
+                }
+            }
+
+            getSavedProjects() {
+                try {
+                    const projects = localStorage.getItem('dtm_projects');
+                    return projects ? JSON.parse(projects) : {};
+                } catch(e) { return {}; }
+            }
+
+            // --- 自訂對話框系統 ---
+            showMsg(title, msg) {
+                document.getElementById('genericModalTitle').innerText = title;
+                document.getElementById('genericModalMessage').innerHTML = msg;
+                document.getElementById('genericModalInput').style.display = 'none';
+                document.getElementById('genericModalCancel').style.display = 'none';
+                document.getElementById('genericModalConfirm').onclick = () => { this.closeGenericModal(); };
+                document.getElementById('genericModal').style.display = 'block';
+            }
+
+            showPrompt(title, msg, defaultValue, callback) {
+                document.getElementById('genericModalTitle').innerText = title;
+                document.getElementById('genericModalMessage').innerHTML = msg;
+                const input = document.getElementById('genericModalInput');
+                input.style.display = 'block';
+                input.value = defaultValue;
+                document.getElementById('genericModalCancel').style.display = 'inline-block';
+                document.getElementById('genericModalConfirm').onclick = () => {
+                    const val = input.value;
+                    this.closeGenericModal();
+                    if(val) callback(val);
+                };
+                document.getElementById('genericModal').style.display = 'block';
+                input.focus();
+            }
+
+            showConfirm(title, msg, callback) {
+                document.getElementById('genericModalTitle').innerText = title;
+                document.getElementById('genericModalMessage').innerHTML = msg;
+                document.getElementById('genericModalInput').style.display = 'none';
+                document.getElementById('genericModalCancel').style.display = 'inline-block';
+                document.getElementById('genericModalConfirm').onclick = () => {
+                    this.closeGenericModal();
+                    callback();
+                };
+                document.getElementById('genericModal').style.display = 'block';
+            }
+
+            closeGenericModal() {
+                document.getElementById('genericModal').style.display = 'none';
+            }
+            // ------------------------
+
+            promptSaveProject() {
+                const defaultName = `專案_${new Date().toISOString().split('T')[0]}`;
+                this.showPrompt("另存新專案", "請輸入專案名稱：", defaultName, (name) => {
+                    const projects = this.getSavedProjects();
+                    projects[name] = { state: this.getCurrentState(), date: new Date().toLocaleString() };
+                    try {
+                        localStorage.setItem('dtm_projects', JSON.stringify(projects));
+                        this.showMsg("成功", `專案 "${name}" 已儲存！`);
+                        // 如果專案管理面板正開著，就刷新它
+                        if (document.getElementById('projectModal').style.display === 'block') {
+                            this.openProjectManager(); 
+                        }
+                    } catch(e) { 
+                        this.showMsg("錯誤", "儲存失敗，可能是瀏覽器儲存空間不足。"); 
+                    }
+                });
+            }
+
+            openProjectManager() {
+                const modal = document.getElementById('projectModal');
+                const container = document.getElementById('projectListContainer');
+                container.innerHTML = '';
+                const projects = this.getSavedProjects();
+                const keys = Object.keys(projects);
+                
+                if(keys.length === 0) {
+                    container.innerHTML = '<div style="padding:15px; color:#888;">目前沒有已儲存的專案。</div>';
+                } else {
+                    keys.forEach(key => {
+                        const proj = projects[key];
+                        const item = document.createElement('div');
+                        item.className = 'project-item';
+                        item.innerHTML = `
+                            <div class="project-info">
+                                <span class="project-name">${key}</span>
+                                <span class="project-date">最後修改: ${proj.date}</span>
+                            </div>
+                            <div class="project-actions">
+                                <button class="success" onclick="app.loadProject('${key}')">載入</button>
+                                <button class="warning" onclick="app.renameProject('${key}')">重新命名</button>
+                                <button class="danger" onclick="app.deleteProject('${key}')">刪除</button>
+                            </div>
+                        `;
+                        container.appendChild(item);
+                    });
+                }
+                modal.style.display = 'block';
+            }
+
+            loadProject(name) {
+                const projects = this.getSavedProjects();
+                if(projects[name]) {
+                    this.restoreState(projects[name].state);
+                    this.render();
+                    document.getElementById('projectModal').style.display = 'none';
+                    this.showMsg("載入成功", `已載入專案 "${name}"`);
+                    this.triggerAutoSave(); 
+                }
+            }
+
+            renameProject(oldName) {
+                this.showPrompt("重新命名", "請輸入新的專案名稱：", oldName, (newName) => {
+                    if(newName && newName !== oldName) {
+                        const projects = this.getSavedProjects();
+                        if(projects[newName]) { 
+                            this.showMsg("錯誤", "該名稱已存在，請選擇其他名稱。"); 
+                            return; 
+                        }
+                        projects[newName] = projects[oldName];
+                        delete projects[oldName];
+                        localStorage.setItem('dtm_projects', JSON.stringify(projects));
+                        this.openProjectManager(); 
+                    }
+                });
+            }
+
+            deleteProject(name) {
+                this.showConfirm("刪除專案", `確定要刪除專案 "${name}" 嗎？此動作無法復原。`, () => {
+                    const projects = this.getSavedProjects();
+                    delete projects[name];
+                    localStorage.setItem('dtm_projects', JSON.stringify(projects));
+                    this.openProjectManager(); 
+                });
+            }
+
+            init() {
+                try {
+                    const autosave = localStorage.getItem('dtm_autosave');
+                    if(autosave) {
+                        this.restoreState(JSON.parse(autosave));
+                        const status = document.getElementById('autoSaveStatus');
+                        if(status) status.innerText = `狀態：已還原上次進度`;
+                        this.render();
+                        return; 
+                    }
+                } catch(e) { console.error("Load autosave failed", e); }
+                document.getElementById('inputData').value = DEFAULT_DATA;
+                document.getElementById('cadInput').value = DEFAULT_CAD_DATA;
+                this.parseData();
+                this.importCADList(true);
+                this.render();
+            }
+
+            // === 基礎演算法 ===
+
+            resize() {
+                this.canvas.width = this.container.clientWidth;
+                this.canvas.height = this.container.clientHeight;
+                const pCanvas = document.getElementById('profileCanvas');
+                const pContainer = document.getElementById('chartContainer');
+                if(pCanvas && pContainer) { pCanvas.width = pContainer.clientWidth; pCanvas.height = pContainer.clientHeight; }
+            }
+
+            parseData() {
+                const rawText = document.getElementById('inputData').value;
+                const lines = rawText.trim().split('\n');
+                const coordFormat = document.querySelector('input[name="coordFormat"]:checked').value;
+                this.points = [];
+                lines.forEach(line => {
+                    const parts = line.trim().split(/\s+/);
+                    if (parts.length >= 4) {
+                        const id = parts[0];
+                        const val1 = parseFloat(parts[1]); const val2 = parseFloat(parts[2]); const z = parseFloat(parts[3]);
+                        if (!isNaN(val1) && !isNaN(val2) && !isNaN(z)) {
+                            let x, y;
+                            if (coordFormat === 'nez') { y = val1; x = val2; } else { x = val1; y = val2; }
+                            this.points.push({ id, x, y, z });
+                        }
+                    }
+                });
+
+                document.getElementById('pointCount').innerText = this.points.length;
+                this.calculateBounds();
+                
+                if (this.points.length > 0) {
+                    const slider = document.getElementById('maskRadius');
+                    if(!slider.value || slider.value == 20) {
+                        slider.value = this.points.length > 500 ? 15 : 25;
+                    }
+                }
+            }
+
+            calculateBounds() {
+                if (this.points.length === 0) return;
+                const xs = this.points.map(p => p.x); const ys = this.points.map(p => p.y); const zs = this.points.map(p => p.z);
+                this.bounds.minX = Math.min(...xs); this.bounds.maxX = Math.max(...xs);
+                this.bounds.minY = Math.min(...ys); this.bounds.maxY = Math.max(...ys);
+                this.bounds.minZ = Math.min(...zs); this.bounds.maxZ = Math.max(...zs);
+                this.renderMinZ = this.bounds.minZ; this.renderMaxZ = this.bounds.maxZ;
+                document.getElementById('legendMin').innerText = this.bounds.minZ.toFixed(2);
+                document.getElementById('legendMax').innerText = this.bounds.maxZ.toFixed(2);
+                this.fitToScreen();
+            }
+
+            fitToScreen() {
+                if (this.points.length === 0) return;
+                const dataWidth = this.bounds.maxX - this.bounds.minX; const dataHeight = this.bounds.maxY - this.bounds.minY;
+                const bufferX = dataWidth * 0.1; const bufferY = dataHeight * 0.1;
+                const viewMinX = this.bounds.minX - bufferX; const viewMaxX = this.bounds.maxX + bufferX;
+                const viewMinY = this.bounds.minY - bufferY; const viewMaxY = this.bounds.maxY + bufferY;
+                const renderWidth = viewMaxX - viewMinX; const renderHeight = viewMaxY - viewMinY;
+                const scaleX = this.canvas.width / renderWidth; const scaleY = this.canvas.height / renderHeight;
+                this.scale = Math.min(scaleX, scaleY);
+                const centerX = (this.bounds.minX + this.bounds.maxX) / 2; const centerY = (this.bounds.minY + this.bounds.maxY) / 2;
+                this.offsetX = (this.canvas.width / 2) - (centerX - this.bounds.minX) * this.scale;
+                this.offsetY = (this.canvas.height / 2) - (centerY - this.bounds.minY) * this.scale;
+                this.render();
+            }
+
+            resetView() { this.fitToScreen(); }
+            worldToScreen(wx, wy) { return { x: (wx - this.bounds.minX) * this.scale + this.offsetX, y: this.canvas.height - ((wy - this.bounds.minY) * this.scale + this.offsetY) }; }
+            screenToWorld(sx, sy) { return { x: (sx - this.offsetX) / this.scale + this.bounds.minX, y: ((this.canvas.height - sy) - this.offsetY) / this.scale + this.bounds.minY }; }
+
+            calculateIDW(targetX, targetY) {
+                const power = parseFloat(document.getElementById('idwPower').value) || 2;
+                const maskRadius = parseFloat(document.getElementById('maskRadius').value) || 0;
+                let num = 0, den = 0, minDist = Infinity;
+                for (const p of this.points) {
+                    const dx = targetX - p.x; const dy = targetY - p.y; const d = Math.sqrt(dx*dx + dy*dy);
+                    if (d < minDist) minDist = d;
+                    if (d < 0.00000001) return { z: p.z, valid: true };
+                    if (maskRadius > 0 && d > maskRadius * 2) continue;
+                    const w = 1 / Math.pow(d, power); num += w * p.z; den += w;
+                }
+                if (maskRadius > 0 && minDist > maskRadius) return { z: 0, valid: false };
+                if (den === 0) return { z: 0, valid: false };
+                return { z: num / den, valid: true };
+            }
+
+            getColor(z) {
+                const min = this.renderMinZ; const max = this.renderMaxZ;
+                let norm = (z - min) / (max - min);
+                if (norm < 0) norm = 0; if (norm > 1) norm = 1;
+                return `hsl(${(1 - norm) * 240}, 100%, 50%)`;
+            }
+
+            // === 中心線與斷面計算 ===
+            
+            updateCenterlineBounds() {
+                if(this.importedCenterline.length === 0) {
+                    this.clBounds = null; return;
+                }
+                let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+                this.importedCenterline.forEach(p => {
+                    if(p.x < minX) minX = p.x; if(p.x > maxX) maxX = p.x;
+                    if(p.y < minY) minY = p.y; if(p.y > maxY) maxY = p.y;
+                });
+                this.clBounds = { minX, maxX, minY, maxY };
+            }
+
+            // 計算點到中心線的垂直距離(正負號代表左右)
+            getOffsetFromCenterline(x, y) {
+                if(!this.importedCenterline || this.importedCenterline.length < 2) return null;
+                let minDist = Infinity;
+                let offset = 0;
+                const len = this.importedCenterline.length - 1;
+                for(let i=0; i<len; i++) {
+                    const A = this.importedCenterline[i];
+                    const B = this.importedCenterline[i+1];
+                    
+                    // Fast Bounding Box Check 
+                    if (minDist !== Infinity) {
+                        const bMinX = Math.min(A.x, B.x) - minDist;
+                        const bMaxX = Math.max(A.x, B.x) + minDist;
+                        if(x < bMinX || x > bMaxX) continue;
+                        const bMinY = Math.min(A.y, B.y) - minDist;
+                        const bMaxY = Math.max(A.y, B.y) + minDist;
+                        if(y < bMinY || y > bMaxY) continue;
+                    }
+
+                    const dx = B.x - A.x;
+                    const dy = B.y - A.y;
+                    const len2 = dx*dx + dy*dy;
+                    if(len2 === 0) continue;
+                    
+                    let t = ((x - A.x)*dx + (y - A.y)*dy) / len2;
+                    t = Math.max(0, Math.min(1, t));
+                    const projX = A.x + t * dx;
+                    const projY = A.y + t * dy;
+                    
+                    const dist2 = (x - projX)**2 + (y - projY)**2;
+                    if(dist2 < minDist) {
+                        minDist = dist2;
+                        const cross = dx * (y - A.y) - dy * (x - A.x);
+                        // Standard cartesian: Cross > 0 means left side.
+                        offset = (cross > 0) ? -Math.sqrt(dist2) : Math.sqrt(dist2);
+                    }
+                }
+                return offset;
+            }
+
+            importCADList(silent = false) {
+                const text = document.getElementById('cadInput').value;
+                if(!text.trim()) { if(!silent) this.showMsg("提示", "請輸入資料"); return; }
+
+                this.importedCenterline = [];
+                const lines = text.split('\n');
+                const regexPoint = /在點\s+X=([\d\.]+)\s+Y=([\d\.]+)/;
+                const regexBulge = /凸度\s+([\-\d\.]+)/;
+                const regexCenter = /中心點\s+X=([\d\.]+)\s+Y=([\d\.]+)/;
+                const regexRadius = /半徑\s+([\d\.]+)/;
+
+                let parsedVertices = []; let currentVertex = {};
+                for(let line of lines) {
+                    let match;
+                    if (match = line.match(regexPoint)) {
+                        if(currentVertex.x !== undefined) parsedVertices.push(currentVertex);
+                        currentVertex = { x: parseFloat(match[1]), y: parseFloat(match[2]), bulge: 0 };
+                    } else if (match = line.match(regexBulge)) { currentVertex.bulge = parseFloat(match[1]);
+                    } else if (match = line.match(regexCenter)) { currentVertex.cx = parseFloat(match[1]); currentVertex.cy = parseFloat(match[2]);
+                    } else if (match = line.match(regexRadius)) { currentVertex.radius = parseFloat(match[1]); }
+                }
+                if(currentVertex.x !== undefined) parsedVertices.push(currentVertex);
+                if(parsedVertices.length < 2) { if(!silent) this.showMsg("錯誤", "無法解析足夠的點位。"); return; }
+
+                let finalPoints = [];
+                for(let i=0; i<parsedVertices.length - 1; i++) {
+                    const p1 = parsedVertices[i]; const p2 = parsedVertices[i+1];
+                    finalPoints.push({x: p1.x, y: p1.y});
+                    if(Math.abs(p1.bulge) > 0.000001) {
+                        if(p1.cx === undefined || p1.radius === undefined) continue; 
+                        const cx = p1.cx; const cy = p1.cy; const r = p1.radius;
+                        let ang1 = Math.atan2(p1.y - cy, p1.x - cx); let ang2 = Math.atan2(p2.y - cy, p2.x - cx);
+                        if (p1.bulge < 0) { if (ang2 > ang1) ang2 -= Math.PI * 2; } else { if (ang2 < ang1) ang2 += Math.PI * 2; }
+                        const steps = Math.ceil(Math.abs(ang2 - ang1) * r / 2.0); 
+                        for(let j=1; j<steps; j++) {
+                            const ang = ang1 + (ang2 - ang1) * (j/steps);
+                            finalPoints.push({x: cx + r * Math.cos(ang), y: cy + r * Math.sin(ang)});
+                        }
+                    }
+                }
+                finalPoints.push({x: parsedVertices[parsedVertices.length-1].x, y: parsedVertices[parsedVertices.length-1].y});
+
+                this.importedCenterline = finalPoints;
+                document.getElementById('cadModal').style.display = 'none';
+                
+                let totalDist = 0; this.importedCenterline[0].dist = 0;
+                for(let i=1; i<this.importedCenterline.length; i++) {
+                    const p1 = this.importedCenterline[i-1]; const p2 = this.importedCenterline[i];
+                    totalDist += Math.sqrt((p2.x-p1.x)**2 + (p2.y-p1.y)**2);
+                    this.importedCenterline[i].dist = totalDist;
+                }
+                
+                this.updateCenterlineBounds();
+
+                if(!silent) {
+                    this.render();
+                    this.triggerAutoSave();
+                    this.showMsg("匯入成功", `共生成 ${finalPoints.length} 點，長 ${totalDist.toFixed(2)}m。`);
+                }
+            }
+
+            openBatchModal() {
+                if(this.importedCenterline.length === 0) { this.showMsg("提示", "請先匯入中心線資料！"); return; }
+                document.getElementById('batchInterval').value = 20; // reset
+                document.getElementById('batchModal').style.display = 'block';
+            }
+
+            batchGenerateSections() {
+                const interval = parseFloat(document.getElementById('batchInterval').value);
+                const widthL = parseFloat(document.getElementById('mainLeftWidth').value) || 4.5;
+                const widthR = parseFloat(document.getElementById('mainRightWidth').value) || 4.5;
+                const startStation = parseFloat(document.getElementById('startStation').value) || 0;
+                
+                if(!interval || interval <= 0) { this.showMsg("錯誤", "間距設定錯誤"); return; }
+
+                this.batchSections = []; 
+                const totalLength = this.importedCenterline[this.importedCenterline.length-1].dist;
+                
+                // 計算需要生成的樁號陣列 (對齊 interval)
+                let stationsToGen = [startStation];
+                let nextStation = Math.ceil(startStation / interval) * interval;
+                if (nextStation === startStation) nextStation += interval;
+                
+                while(nextStation <= startStation + totalLength) {
+                    stationsToGen.push(nextStation);
+                    nextStation += interval;
+                }
+                if(stationsToGen[stationsToGen.length-1] < startStation + totalLength - 0.01) {
+                    stationsToGen.push(startStation + totalLength);
+                }
+
+                for(let st of stationsToGen) {
+                    const distAlongLine = st - startStation;
+                    const info = this.getPointInfoAtDistance(distAlongLine);
+                    if(!info) continue;
+                    
+                    const nx = -Math.sin(info.angle); 
+                    const ny = Math.cos(info.angle);
+                    
+                    this.batchSections.push({
+                        station: st,
+                        p1: { x: info.x + nx * widthL, y: info.y + ny * widthL }, // Left
+                        p2: { x: info.x - nx * widthR, y: info.y - ny * widthR }, // Right
+                        name: this.formatStation(st),
+                        startOffset: -widthL,
+                        endOffset: widthR
+                    });
+                }
+                
+                document.getElementById('batchModal').style.display = 'none';
+                this.updateStationListUI();
+                this.showMsg("生成完畢", `已生成 ${this.batchSections.length} 個斷面。`);
+            }
+
+            getPointInfoAtDistance(targetDist) {
+                for(let i=0; i<this.importedCenterline.length-1; i++) {
+                    const p1 = this.importedCenterline[i]; const p2 = this.importedCenterline[i+1];
+                    if(targetDist >= p1.dist && targetDist <= p2.dist) {
+                        const segLen = p2.dist - p1.dist;
+                        if(segLen === 0) return { x: p1.x, y: p1.y, angle: 0 }; 
+                        const t = (targetDist - p1.dist) / segLen;
+                        return { x: p1.x + (p2.x - p1.x) * t, y: p1.y + (p2.y - p1.y) * t, angle: Math.atan2(p2.y - p1.y, p2.x - p1.x) };
+                    }
+                } return null;
+            }
+
+            formatStation(st) { return `${Math.floor(st / 1000)}K+${(st % 1000).toFixed(2).padStart(6, '0')}`; }
+
+            updateStationListUI() {
+                const panel = document.getElementById('stationListPanel');
+                const list = document.getElementById('stationListContent');
+                panel.style.display = 'flex'; list.innerHTML = '';
+                this.batchSections.forEach((sec) => {
+                    const div = document.createElement('div');
+                    div.className = 'station-item'; div.innerText = sec.name;
+                    div.onclick = () => {
+                        document.querySelectorAll('.station-item').forEach(el => el.classList.remove('active'));
+                        div.classList.add('active');
+                        this.sectionStart = sec.p1; this.sectionEnd = sec.p2;
+                        this.render(); this.generateProfile(sec);
+                    };
+                    list.appendChild(div);
+                });
+            }
+
+            generateProfile(sec = null) {
+                if(sec) {
+                    const data = this.generateProfileData(sec.p1, sec.p2, sec.startOffset, sec.endOffset);
+                    this.renderProfileChart(data, sec.startOffset, sec.endOffset);
+                    document.getElementById('profileTitle').innerText = `橫斷面預覽: ${sec.name}`;
+                } else {
+                    if (!this.sectionStart || !this.sectionEnd) return;
+                    let wp1 = this.sectionStart; let wp2 = this.sectionEnd;
+                    if (this.uiMode === 'section' && this.isDragging) {
+                        wp1 = this.screenToWorld(this.sectionStart.x, this.sectionStart.y);
+                        wp2 = this.screenToWorld(this.sectionEnd.x, this.sectionEnd.y);
+                    }
+                    const totalDist = Math.sqrt((wp2.x-wp1.x)**2 + (wp2.y-wp1.y)**2);
+                    const data = this.generateProfileData(wp1, wp2, 0, totalDist);
+                    this.renderProfileChart(data, 0, totalDist);
+                    document.getElementById('profileTitle').innerText = "橫斷面預覽 (手動)";
+                }
+            }
+            
+            generateProfileData(p1, p2, startOffset, endOffset) {
+                const totalDist = Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2));
+                if (totalDist === 0) return [];
+                let steps = Math.max(10, Math.min(200, Math.ceil(totalDist / 0.5)));
+                const profileData = [];
+                for (let i = 0; i <= steps; i++) {
+                    const t = i / steps;
+                    const cx = p1.x + (p2.x - p1.x) * t;
+                    const cy = p1.y + (p2.y - p1.y) * t;
+                    const res = this.calculateIDW(cx, cy);
+                    const offset = startOffset + (endOffset - startOffset) * t;
+                    profileData.push({ offset: offset, z: res.valid ? res.z : null });
+                }
+                return profileData;
+            }
+
+            renderProfileChart(data, startOffset, endOffset) {
+                const panel = document.getElementById('profilePanel'); panel.style.display = 'flex';
+                const canvas = document.getElementById('profileCanvas');
+                canvas.width = document.getElementById('chartContainer').clientWidth;
+                canvas.height = document.getElementById('chartContainer').clientHeight;
+                this.drawProfileToContext(canvas.getContext('2d'), canvas.width, canvas.height, data, startOffset, endOffset);
+            }
+
+            drawProfileToContext(ctx, w, h, data, startOffset, endOffset) {
+                ctx.clearRect(0, 0, w, h);
+                let minZ = Infinity, maxZ = -Infinity, validPoints = 0;
+                let refZ = null;
+                
+                data.forEach(p => { 
+                    if (p.z !== null) { 
+                        if (p.z < minZ) minZ = p.z; 
+                        if (p.z > maxZ) maxZ = p.z; 
+                        validPoints++; 
+                        if (Math.abs(p.offset) < 0.001) refZ = p.z;
+                    }
+                });
+                
+                if (validPoints < 2) { ctx.fillStyle = '#aaa'; ctx.font = '14px Arial'; ctx.textAlign = 'center'; ctx.fillText('無有效高程', w/2, h/2); return; }
+                
+                if (refZ === null) refZ = (maxZ + minZ) / 2;
+                
+                const padLeft = 40; const padRight = 20; const padTop = 25; const padBottom = 40;
+                const graphW = w - padLeft - padRight;
+                const graphH = h - padTop - padBottom;
+                
+                let drawMinZ, drawMaxZ;
+                const zRange = parseFloat(document.getElementById('profileZRange').value);
+                
+                if (zRange > 0) {
+                    drawMinZ = refZ - zRange / 2;
+                    drawMaxZ = refZ + zRange / 2;
+                } else {
+                    const rangeZ = maxZ - minZ;
+                    const paddingZ = rangeZ > 0 ? rangeZ * 0.1 : 1; 
+                    drawMinZ = minZ - paddingZ;
+                    drawMaxZ = maxZ + paddingZ;
+                }
+                
+                const toX = (offset) => padLeft + ((offset - startOffset) / (endOffset - startOffset)) * graphW;
+                const toY = (z) => padTop + graphH - ((z - drawMinZ) / (drawMaxZ - drawMinZ)) * graphH;
+
+                // X & Y Axes borders
+                ctx.strokeStyle = '#444'; ctx.lineWidth = 1; ctx.beginPath();
+                ctx.moveTo(padLeft, padTop); ctx.lineTo(padLeft, h - padBottom);
+                ctx.moveTo(padLeft, h - padBottom); ctx.lineTo(w - padRight, h - padBottom); ctx.stroke();
+
+                // Y Axis labels
+                ctx.fillStyle = '#aaa'; ctx.font = '11px monospace'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+                ctx.fillText(drawMaxZ.toFixed(3), padLeft - 5, padTop); 
+                if (zRange > 0) ctx.fillText(refZ.toFixed(3), padLeft - 5, padTop + graphH / 2);
+                ctx.fillText(drawMinZ.toFixed(3), padLeft - 5, h - padBottom);
+
+                if (zRange > 0) {
+                    ctx.beginPath();
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+                    ctx.setLineDash([2, 2]);
+                    ctx.moveTo(padLeft, padTop + graphH / 2);
+                    ctx.lineTo(w - padRight, padTop + graphH / 2);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                }
+
+                // X Axis Grid & Labels
+                ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+                const startInt = Math.ceil(startOffset);
+                const endInt = Math.floor(endOffset);
+                
+                for(let i = startInt; i <= endInt; i++) {
+                    const px = toX(i);
+                    ctx.beginPath();
+                    if(i === 0) {
+                        ctx.strokeStyle = 'rgba(231, 76, 60, 0.8)'; 
+                        ctx.lineWidth = 1.5;
+                        ctx.setLineDash([5, 5]);
+                    } else {
+                        ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+                        ctx.lineWidth = 1;
+                        ctx.setLineDash([]);
+                    }
+                    ctx.moveTo(px, padTop); ctx.lineTo(px, h - padBottom); ctx.stroke();
+                    ctx.setLineDash([]);
+                    
+                    ctx.fillStyle = (i === 0) ? '#e74c3c' : '#aaa';
+                    ctx.font = (i === 0) ? 'bold 12px Arial' : '10px Arial';
+                    ctx.fillText(i, px, h - padBottom + 8);
+                }
+
+                ctx.fillStyle = '#888'; ctx.font = '10px Arial';
+                if (startOffset !== startInt) ctx.fillText(startOffset.toFixed(1), toX(startOffset), h - padBottom + 22);
+                if (endOffset !== endInt) ctx.fillText(endOffset.toFixed(1), toX(endOffset), h - padBottom + 22);
+
+                ctx.save();
+                ctx.beginPath();
+                ctx.rect(padLeft, padTop, graphW, graphH);
+                ctx.clip();
+
+                ctx.beginPath(); ctx.strokeStyle = '#4cd137'; ctx.lineWidth = 2.5; 
+                let isDrawing = false;
+                for (let i = 0; i < data.length; i++) {
+                    if (data[i].z === null) { isDrawing = false; continue; }
+                    const px = toX(data[i].offset), py = toY(data[i].z);
+                    if (!isDrawing) { ctx.moveTo(px, py); isDrawing = true; } else { ctx.lineTo(px, py); }
+                } 
+                ctx.stroke();
+                
+                ctx.restore(); 
+            }
+
+            showAllSections() {
+                if (this.batchSections.length === 0) { this.showMsg("提示", "請先執行「批量生成橫斷面」。"); return; }
+                document.getElementById('allSectionsModal').style.display = 'block';
+                const grid = document.getElementById('allSectionsGrid'); grid.innerHTML = '';
+                this.batchSections.forEach(sec => {
+                    const card = document.createElement('div'); card.className = 'batch-card';
+                    card.innerHTML = `<h4>${sec.name}</h4><canvas width="450" height="250"></canvas>`;
+                    grid.appendChild(card);
+                    setTimeout(() => { 
+                        this.drawProfileToContext(card.querySelector('canvas').getContext('2d'), 450, 250, this.generateProfileData(sec.p1, sec.p2, sec.startOffset, sec.endOffset), sec.startOffset, sec.endOffset); 
+                    }, 10);
+                });
+            }
+
+            toggleSectionMode() {
+                const btn = document.getElementById('btnSectionMode');
+                if (this.uiMode === 'pan') {
+                    this.uiMode = 'section'; btn.classList.add('active'); this.canvas.style.cursor = 'crosshair';
+                } else {
+                    this.uiMode = 'pan'; btn.classList.remove('active'); this.canvas.style.cursor = 'grab';
+                    this.sectionStart = null; this.sectionEnd = null; this.render(); 
+                }
+            }
+
+            closeProfile() { document.getElementById('profilePanel').style.display = 'none'; }
+
+            // === 事件處理 ===
+            handleMouseDown(e) {
+                const rect = this.canvas.getBoundingClientRect();
+                const sx = e.clientX - rect.left, sy = e.clientY - rect.top;
+                if (this.uiMode === 'section') { this.sectionStart = this.screenToWorld(sx, sy); this.sectionEnd = this.sectionStart; } 
+                else { this.lastMouse = { x: e.clientX, y: e.clientY }; this.canvas.style.cursor = 'grabbing'; }
+                this.isDragging = true;
+            }
+
+            handleMouseUp(e) {
+                if (this.isDragging) {
+                    this.isDragging = false;
+                    if (this.uiMode === 'section') { this.generateProfile(); } 
+                    else { this.canvas.style.cursor = 'grab'; }
+                    this.render(false); 
+                }
+            }
+
+            handleMouseMove(e) {
+                const rect = this.canvas.getBoundingClientRect();
+                const sx = e.clientX - rect.left, sy = e.clientY - rect.top;
+                if (this.isDragging) {
+                    if (this.uiMode === 'section') { this.sectionEnd = this.screenToWorld(sx, sy); } 
+                    else { this.offsetX += e.clientX - this.lastMouse.x; this.offsetY -= e.clientY - this.lastMouse.y; this.lastMouse = { x: e.clientX, y: e.clientY }; }
+                    this.render(true); return; 
+                }
+                const worldPos = this.screenToWorld(sx, sy); const result = this.calculateIDW(worldPos.x, worldPos.y);
+                const tooltip = document.getElementById('tooltip'); tooltip.style.left = sx + 'px'; tooltip.style.top = sy + 'px';
+                if (result.valid) { tooltip.style.display = 'block'; tooltip.innerHTML = `X: ${worldPos.x.toFixed(3)}<br>Y: ${worldPos.y.toFixed(3)}<br><span style="color:#4cd137; font-weight:bold;">Z: ${result.z.toFixed(3)}</span>`; } else { tooltip.style.display = 'none'; }
+            }
+
+            handleWheel(e) {
+                e.preventDefault(); 
+                const rect = this.canvas.getBoundingClientRect();
+                const worldPosBefore = this.screenToWorld(e.clientX - rect.left, e.clientY - rect.top);
+                this.scale *= (e.deltaY < 0) ? 1.1 : (1 / 1.1); 
+                this.offsetX = (e.clientX - rect.left) - (worldPosBefore.x - this.bounds.minX) * this.scale;
+                this.offsetY = (this.canvas.height - (e.clientY - rect.top)) - (worldPosBefore.y - this.bounds.minY) * this.scale;
+                this.render(true); 
+            }
+
+            // === 重構繪圖核心以支援中心線遮罩 ===
+            render(interactionMode = false) {
+                if (this.points.length === 0) return;
+                if (interactionMode) { if (this.renderTimer) clearTimeout(this.renderTimer); } 
+                else { if (!this.renderTimer) document.getElementById('loading').style.display = 'block'; }
+                
+                const draw = () => {
+                    const widthL = parseFloat(document.getElementById('mainLeftWidth').value) || 4.5;
+                    const widthR = parseFloat(document.getElementById('mainRightWidth').value) || 4.5;
+                    const maxW = Math.max(widthL, widthR);
+                    const applyMasking = this.importedCenterline.length > 0;
+
+                    const pTL = this.screenToWorld(0, 0), pBR = this.screenToWorld(this.canvas.width, this.canvas.height);
+                    const vMinX = Math.min(pTL.x, pBR.x), vMaxX = Math.max(pTL.x, pBR.x), vMinY = Math.min(pTL.y, pBR.y), vMaxY = Math.max(pTL.y, pBR.y);
+                    let localMinZ = Infinity, localMaxZ = -Infinity, visibleCount = 0;
+                    
+                    for (const p of this.points) {
+                        if (p.x >= vMinX && p.x <= vMaxX && p.y >= vMinY && p.y <= vMaxY) {
+                            if (applyMasking) {
+                                if (p.x < this.clBounds.minX - maxW || p.x > this.clBounds.maxX + maxW || p.y < this.clBounds.minY - maxW || p.y > this.clBounds.maxY + maxW) continue;
+                                const offset = this.getOffsetFromCenterline(p.x, p.y);
+                                if (offset === null || offset < -widthL || offset > widthR) continue;
+                            }
+                            if (p.z < localMinZ) localMinZ = p.z; if (p.z > localMaxZ) localMaxZ = p.z; visibleCount++;
+                        }
+                    }
+                    if (visibleCount < 2) { this.renderMinZ = this.bounds.minZ; this.renderMaxZ = this.bounds.maxZ; } 
+                    else { this.renderMinZ = localMinZ; this.renderMaxZ = localMaxZ; }
+                    if (Math.abs(this.renderMaxZ - this.renderMinZ) < 0.0001) { this.renderMaxZ += 0.1; this.renderMinZ -= 0.1; }
+                    
+                    const legendMinEl = document.getElementById('legendMin'), legendMaxEl = document.getElementById('legendMax');
+                    if (legendMinEl && legendMaxEl) { legendMinEl.innerText = this.renderMinZ.toFixed(2); legendMaxEl.innerText = this.renderMaxZ.toFixed(2); }
+                    
+                    this.ctx.fillStyle = '#000'; this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+                    let baseStep = this.points.length > 1000 ? 10 : (this.points.length > 500 ? 8 : 5);
+                    const step = interactionMode ? (baseStep * 3) : baseStep; 
+                    const cols = Math.ceil(this.canvas.width / step), rows = Math.ceil(this.canvas.height / step);
+                    
+                    for (let r = 0; r < rows; r++) {
+                        for (let c = 0; c < cols; c++) {
+                            const sx = c * step, sy = r * step;
+                            const worldPos = this.screenToWorld(sx + step/2, sy + step/2);
+                            
+                            // 高效遮罩過濾
+                            if(applyMasking) {
+                                if (worldPos.x < this.clBounds.minX - maxW || worldPos.x > this.clBounds.maxX + maxW || 
+                                    worldPos.y < this.clBounds.minY - maxW || worldPos.y > this.clBounds.maxY + maxW) continue;
+                                const offset = this.getOffsetFromCenterline(worldPos.x, worldPos.y);
+                                if(offset === null || offset < -widthL || offset > widthR) continue;
+                            }
+
+                            const result = this.calculateIDW(worldPos.x, worldPos.y);
+                            if (result.valid) { this.ctx.fillStyle = this.getColor(result.z); this.ctx.fillRect(sx, sy, step+1, step+1); }
+                        }
+                    }
+                    if (document.getElementById('showGrid').checked) this.drawGrid();
+                    if (document.getElementById('showPoints').checked) {
+                        this.ctx.fillStyle = 'rgba(255,255,255,0.7)';
+                        if (!interactionMode || this.points.length < 500) {
+                            for (const p of this.points) {
+                                const pos = this.worldToScreen(p.x, p.y);
+                                if (pos.x < -10 || pos.x > this.canvas.width + 10 || pos.y < -10 || pos.y > this.canvas.height + 10) continue;
+                                
+                                if(applyMasking) {
+                                    if (p.x < this.clBounds.minX - maxW || p.x > this.clBounds.maxX + maxW || p.y < this.clBounds.minY - maxW || p.y > this.clBounds.maxY + maxW) continue;
+                                    const offset = this.getOffsetFromCenterline(p.x, p.y);
+                                    if(offset === null || offset < -widthL || offset > widthR) continue;
+                                }
+
+                                this.ctx.beginPath(); this.ctx.arc(pos.x, pos.y, 2, 0, Math.PI * 2); this.ctx.fill();
+                            }
+                        }
+                    }
+                    if (this.importedCenterline.length > 0) {
+                        this.ctx.beginPath(); this.ctx.strokeStyle = 'rgba(231, 76, 60, 0.8)'; this.ctx.lineWidth = 2; let first = true;
+                        for(let p of this.importedCenterline) {
+                            const sPos = this.worldToScreen(p.x, p.y);
+                            if (first) { this.ctx.moveTo(sPos.x, sPos.y); first = false; } else { this.ctx.lineTo(sPos.x, sPos.y); }
+                        } this.ctx.stroke();
+                    }
+                    if (this.sectionStart && this.sectionEnd) {
+                        const sP1 = this.worldToScreen(this.sectionStart.x, this.sectionStart.y), sP2 = this.worldToScreen(this.sectionEnd.x, this.sectionEnd.y);
+                        this.ctx.beginPath(); this.ctx.moveTo(sP1.x, sP1.y); this.ctx.lineTo(sP2.x, sP2.y);
+                        this.ctx.strokeStyle = 'yellow'; this.ctx.lineWidth = 3; this.ctx.setLineDash([10, 5]); this.ctx.stroke(); this.ctx.setLineDash([]); 
+                        this.ctx.fillStyle = 'yellow'; this.ctx.beginPath(); this.ctx.arc(sP1.x, sP1.y, 4, 0, Math.PI*2); this.ctx.arc(sP2.x, sP2.y, 4, 0, Math.PI*2); this.ctx.fill();
+                    }
+                    if (!interactionMode) document.getElementById('loading').style.display = 'none';
+                    if (interactionMode) {
+                        if (this.renderTimer) clearTimeout(this.renderTimer);
+                        this.renderTimer = setTimeout(() => { this.renderTimer = null; this.render(false); }, 500);
+                    }
+                };
+                if (!interactionMode) setTimeout(draw, 10); else draw(); 
+            }
+
+            drawGrid() {
+                this.ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+                this.ctx.lineWidth = 1;
+                const step = 50; 
+                this.ctx.beginPath();
+                for(let x=0; x<this.canvas.width; x+=step) {
+                    this.ctx.moveTo(x, 0);
+                    this.ctx.lineTo(x, this.canvas.height);
+                }
+                for(let y=0; y<this.canvas.height; y+=step) {
+                    this.ctx.moveTo(0, y);
+                    this.ctx.lineTo(this.canvas.width, y);
+                }
+                this.ctx.stroke();
+            }
+
+            queryPoint() {
+                const qx = parseFloat(document.getElementById('queryX').value), qy = parseFloat(document.getElementById('queryY').value);
+                const resultBox = document.getElementById('queryResult');
+                if (isNaN(qx) || isNaN(qy)) { resultBox.innerText = "座標輸入錯誤"; resultBox.style.color = "red"; return; }
+                const result = this.calculateIDW(qx, qy);
+                if (result.valid) { resultBox.innerHTML = `X: ${qx}<br>Y: ${qy}<br>Z: ${result.z.toFixed(4)}`; resultBox.style.color = "#4cd137"; } 
+                else { resultBox.innerHTML = `X: ${qx}<br>Y: ${qy}<br>超出裁切範圍`; resultBox.style.color = "#e74c3c"; }
+                const sPos = this.worldToScreen(qx, qy); this.render(false); 
+                setTimeout(() => { this.ctx.beginPath(); this.ctx.arc(sPos.x, sPos.y, 8, 0, Math.PI * 2); this.ctx.strokeStyle = '#ff00ff'; this.ctx.lineWidth = 3; this.ctx.stroke(); }, 100); 
+            }
+
+            loadData() { this.parseData(); this.render(); }
+        }
+
+        const app = new TerrainMap();
+        window.onload = () => { app.init(); };
+    </script>
+    <script src="../nav.js" defer></script>
+</body>
+</html>

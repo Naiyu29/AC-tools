@@ -8,7 +8,8 @@
   // 工具清單（陣列順序＝選單顯示順序）。folder 必須和 docs/ 底下的資料夾名稱一致。
   var tools = [
     { folder: 'AC-斷面分析', label: '斷面分析' },
-    { folder: 'AC-縱坡',     label: '縱坡' }
+    { folder: 'AC-縱坡',     label: '縱坡' },
+    { folder: 'AC-地形測量', label: '地形測量' }
   ];
 
   // 判斷目前開啟的是哪個工具（從網址路徑找出符合的資料夾名稱）
