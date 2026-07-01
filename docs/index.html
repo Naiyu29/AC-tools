@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AC 工具集</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', 'Noto Sans TC', sans-serif;
+      background: #f1f5f9;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 48px 16px 64px;
+      color: #1e293b;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 48px;
+    }
+
+    header .badge {
+      display: inline-block;
+      background: #dbeafe;
+      color: #1d4ed8;
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: .04em;
+      padding: 4px 14px;
+      border-radius: 9999px;
+      margin-bottom: 16px;
+    }
+
+    header h1 {
+      font-size: clamp(28px, 5vw, 40px);
+      font-weight: 700;
+      color: #0f172a;
+      letter-spacing: -.02em;
+      margin-bottom: 10px;
+    }
+
+    header p {
+      font-size: 16px;
+      color: #64748b;
+      max-width: 420px;
+      line-height: 1.6;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 20px;
+      width: 100%;
+      max-width: 960px;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 16px;
+      padding: 28px 28px 24px;
+      box-shadow: 0 1px 3px rgba(0,0,0,.08), 0 4px 16px rgba(0,0,0,.06);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      transition: box-shadow .2s, transform .2s;
+    }
+
+    .card:hover {
+      box-shadow: 0 4px 12px rgba(0,0,0,.1), 0 12px 32px rgba(0,0,0,.1);
+      transform: translateY(-2px);
+    }
+
+    .card-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+    }
+
+    .card-icon.blue  { background: #dbeafe; }
+    .card-icon.green { background: #dcfce7; }
+    .card-icon.amber { background: #fef3c7; }
+
+    .card h2 {
+      font-size: 18px;
+      font-weight: 700;
+      color: #0f172a;
+    }
+
+    .card p {
+      font-size: 14px;
+      color: #64748b;
+      line-height: 1.6;
+      flex: 1;
+    }
+
+    .card a {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 4px;
+      background: #2563eb;
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
+      padding: 10px 20px;
+      border-radius: 9999px;
+      text-decoration: none;
+      transition: background .15s;
+      align-self: flex-start;
+    }
+
+    .card a:hover { background: #1d4ed8; }
+
+    footer {
+      margin-top: 56px;
+      font-size: 13px;
+      color: #94a3b8;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="badge">道路工程分析</div>
+    <h1>AC 工具集</h1>
+    <p>瀝青混凝土施工計算工具，適用於刨鋪、縱坡設計與地形測量作業。</p>
+  </header>
+
+  <div class="grid">
+
+    <div class="card">
+      <div class="card-icon blue">📐</div>
+      <h2>斷面分析</h2>
+      <p>輸入橫斷面里程與高程，自動計算刨除／舖築面積、體積與平均厚度，並產生分布圖與高程折線圖。支援雲端儲存。</p>
+      <a href="AC-斷面分析/">開啟工具 →</a>
+    </div>
+
+    <div class="card">
+      <div class="card-icon green">📈</div>
+      <h2>縱坡計算</h2>
+      <p>依據里程與設計高程計算縱坡坡度、坡長與豎曲線，協助道路縱斷面設計與複核。</p>
+      <a href="AC-縱坡/">開啟工具 →</a>
+    </div>
+
+    <div class="card">
+      <div class="card-icon amber">🗺️</div>
+      <h2>地形測量 (DTM)</h2>
+      <p>匯入測量座標點，以 IDW 插值法產生地形熱圖，並批次抽取任意橫斷面高程剖面。支援 CAD 中心線匯入。</p>
+      <a href="AC-地形測量/">開啟工具 →</a>
+    </div>
+
+  </div>
+
+  <footer>
+    J3R Engineering &nbsp;·&nbsp; AC 工具集
+  </footer>
+
+</body>
+</html>
