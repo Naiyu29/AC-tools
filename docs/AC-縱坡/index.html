@@ -22,7 +22,7 @@
         .row-action-btn:hover { background-color: #d1d5db; }
         #customPavingCanvas { cursor: grab; }
         #customPavingCanvas:active { cursor: grabbing; }
-        #dataTableContainer { max-height: 480px; overflow-y: auto; }
+        #dataTableContainer { max-height: 480px; overflow-y: auto; overflow-x: auto; }
         #dataTable thead { position: sticky; top: 0; background-color: #f9fafb; z-index: 10; }
         .elevation-input { width: 100%; background-color: #eff6ff; text-align: center; border: 1px solid #dbeafe; border-radius: 4px; padding: 2px; transition: border-color 0.3s; }
         .thickness-cell.out-of-range { color: #ef4444; font-weight: bold; }
@@ -101,7 +101,7 @@
             <div class="relative w-full h-[60vh] mb-8 bg-gray-50 rounded-lg border">
                 <canvas id="customPavingCanvas"></canvas>
             </div>
-            <div class="flex justify-between items-center mb-2 gap-2">
+            <div class="flex flex-wrap justify-between items-center mb-2 gap-2">
                  <button id="copyCSVDataBtn" class="action-button">複製表格數據 (CSV)</button>
                  <button id="shareDataBtn" class="action-button">分享此數據狀態 (URL)</button>
                  <div class="flex justify-end gap-2">
