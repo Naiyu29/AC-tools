@@ -564,10 +564,10 @@
                 try {
                     // 1. Always parse Ground and Paved data first.
                     if (!document.getElementById('section1Data').value.trim()) throw new Error("斷面 1 為必填欄位。");
-                    ({ dataMap: dataMap1, skipped: skipped1 } = parseData(document.getElementById('section1Data').value));
-                    allSkipped.push(...skipped1.map(s => '[斷面1] ' + s));
-                    ({ dataMap: dataMap3, skipped: skipped3 } = parseData(document.getElementById('section3Data').value));
-                    allSkipped.push(...skipped3.map(s => '[斷面3] ' + s));
+                    let r1 = parseData(document.getElementById('section1Data').value);
+                    dataMap1 = r1.dataMap; allSkipped.push(...r1.skipped.map(s => '[斷面1] ' + s));
+                    let r3 = parseData(document.getElementById('section3Data').value);
+                    dataMap3 = r3.dataMap; allSkipped.push(...r3.skipped.map(s => '[斷面3] ' + s));
 
                     // 2. Determine how to get Milling data (dataMap2).
                     const section2Method = document.querySelector('input[name="section2Method"]:checked').value;
@@ -594,8 +594,8 @@
                             }
                         }
                     } else {
-                        ({ dataMap: dataMap2, skipped: skipped2 } = parseData(document.getElementById('section2Data').value));
-                        allSkipped.push(...skipped2.map(s => '[斷面2] ' + s));
+                        let r2 = parseData(document.getElementById('section2Data').value);
+                        dataMap2 = r2.dataMap; allSkipped.push(...r2.skipped.map(s => '[斷面2] ' + s));
                     }
 
                     // 3. Continue with the rest of the analysis.
