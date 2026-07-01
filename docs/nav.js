@@ -31,7 +31,9 @@
     '.acnav-link{color:#d1d5db;text-decoration:none;font-size:14px;font-weight:500;' +
     'padding:6px 14px;border-radius:9999px;transition:background .15s,color .15s;white-space:nowrap;}' +
     '.acnav-link:hover{background:#374151;color:#fff;}' +
-    '.acnav-active{background:#3b82f6;color:#fff;cursor:default;}';
+    '.acnav-active{background:#3b82f6;color:#fff;cursor:default;}' +
+    '.acnav-home{color:#9ca3af !important;}' +
+    '.acnav-sep{width:1px;height:18px;background:#374151;margin:0 4px;flex-shrink:0;}';
   var style = document.createElement('style');
   style.textContent = css;
   document.head.appendChild(style);
@@ -39,7 +41,12 @@
   // 建立選單列
   var bar = document.createElement('nav');
   bar.className = 'acnav-bar';
-  var html = '<span class="acnav-title">🛠️ AC 工具集</span>';
+  var root = location.hostname === 'localhost'
+    ? '/'
+    : '/AC-tools/';
+  var html = '<a class="acnav-link acnav-home" href="' + root + '">🏠 首頁</a>'
+           + '<span class="acnav-sep"></span>'
+           + '<span class="acnav-title">AC 工具集</span>';
   tools.forEach(function (t) {
     if (t.folder === currentFolder) {
       html += '<span class="acnav-link acnav-active">' + t.label + '</span>';
