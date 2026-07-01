@@ -5,167 +5,211 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AC 工具集</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
-      font-family: 'Inter', 'Noto Sans TC', sans-serif;
-      background: #f1f5f9;
+      font-family: 'Roboto', 'Noto Sans TC', sans-serif;
+      background: #fafafa;
       min-height: 100vh;
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: 48px 16px 64px;
-      color: #1e293b;
+      color: rgba(0,0,0,.87);
     }
 
-    header {
+    /* MUI AppBar */
+    .appbar {
+      width: 100%;
+      background: #1976d2;
+      color: #fff;
+      padding: 0 24px;
+      height: 64px;
+      display: flex;
+      align-items: center;
+      box-shadow: 0 2px 4px -1px rgba(0,0,0,.2),
+                  0 4px 5px  0   rgba(0,0,0,.14),
+                  0 1px 10px 0   rgba(0,0,0,.12);
+      flex-shrink: 0;
+    }
+
+    .appbar-title {
+      font-size: 20px;
+      font-weight: 500;
+      letter-spacing: .0075em;
+    }
+
+    /* Hero */
+    .hero {
       text-align: center;
-      margin-bottom: 48px;
+      padding: 64px 16px 40px;
+      max-width: 560px;
     }
 
-    header .badge {
-      display: inline-block;
-      background: #dbeafe;
-      color: #1d4ed8;
-      font-size: 13px;
-      font-weight: 600;
-      letter-spacing: .04em;
-      padding: 4px 14px;
-      border-radius: 9999px;
-      margin-bottom: 16px;
+    .hero h1 {
+      font-size: clamp(2rem, 5vw, 3rem);
+      font-weight: 300;
+      letter-spacing: -.5px;
+      color: rgba(0,0,0,.87);
+      margin-bottom: 12px;
     }
 
-    header h1 {
-      font-size: clamp(28px, 5vw, 40px);
-      font-weight: 700;
-      color: #0f172a;
-      letter-spacing: -.02em;
-      margin-bottom: 10px;
+    .hero p {
+      font-size: 1rem;
+      color: rgba(0,0,0,.6);
+      line-height: 1.5;
     }
 
-    header p {
-      font-size: 16px;
-      color: #64748b;
-      max-width: 420px;
-      line-height: 1.6;
-    }
-
+    /* Grid */
     .grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-      gap: 20px;
+      gap: 24px;
       width: 100%;
-      max-width: 960px;
+      max-width: 1000px;
+      padding: 0 24px 64px;
     }
 
+    /* MUI Paper elevation 1 */
     .card {
       background: #fff;
-      border-radius: 16px;
-      padding: 28px 28px 24px;
-      box-shadow: 0 1px 3px rgba(0,0,0,.08), 0 4px 16px rgba(0,0,0,.06);
+      border-radius: 4px;
+      padding: 24px;
+      box-shadow: 0 2px 1px -1px rgba(0,0,0,.2),
+                  0 1px 1px  0   rgba(0,0,0,.14),
+                  0 1px 3px  0   rgba(0,0,0,.12);
       display: flex;
       flex-direction: column;
-      gap: 12px;
-      transition: box-shadow .2s, transform .2s;
+      gap: 16px;
+      transition: box-shadow .3s cubic-bezier(.4,0,.2,1);
     }
 
+    /* elevation 4 on hover */
     .card:hover {
-      box-shadow: 0 4px 12px rgba(0,0,0,.1), 0 12px 32px rgba(0,0,0,.1);
-      transform: translateY(-2px);
+      box-shadow: 0 2px 4px -1px rgba(0,0,0,.2),
+                  0 4px 5px  0   rgba(0,0,0,.14),
+                  0 1px 10px 0   rgba(0,0,0,.12);
     }
 
-    .card-icon {
-      width: 48px;
-      height: 48px;
-      border-radius: 12px;
+    .card-header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 24px;
+      font-size: 20px;
+      flex-shrink: 0;
     }
 
-    .card-icon.blue  { background: #dbeafe; }
-    .card-icon.green { background: #dcfce7; }
-    .card-icon.amber { background: #fef3c7; }
+    .avatar.blue  { background: #e3f2fd; }
+    .avatar.green { background: #e8f5e9; }
+    .avatar.amber { background: #fff8e1; }
 
     .card h2 {
-      font-size: 18px;
-      font-weight: 700;
-      color: #0f172a;
+      font-size: 1.25rem;
+      font-weight: 500;
+      letter-spacing: .0075em;
+      color: rgba(0,0,0,.87);
     }
 
     .card p {
-      font-size: 14px;
-      color: #64748b;
-      line-height: 1.6;
+      font-size: .875rem;
+      color: rgba(0,0,0,.6);
+      line-height: 1.43;
       flex: 1;
     }
 
+    /* MUI Contained Button */
     .card a {
       display: inline-flex;
       align-items: center;
-      gap: 6px;
-      margin-top: 4px;
-      background: #2563eb;
+      gap: 4px;
+      background: #1976d2;
       color: #fff;
-      font-size: 14px;
-      font-weight: 600;
-      padding: 10px 20px;
-      border-radius: 9999px;
+      font-family: 'Roboto', 'Noto Sans TC', sans-serif;
+      font-size: .875rem;
+      font-weight: 500;
+      letter-spacing: .02857em;
+      text-transform: uppercase;
+      padding: 6px 16px;
+      min-height: 36px;
+      border-radius: 4px;
       text-decoration: none;
-      transition: background .15s;
       align-self: flex-start;
+      box-shadow: 0 3px 1px -2px rgba(0,0,0,.2),
+                  0 2px 2px  0   rgba(0,0,0,.14),
+                  0 1px 5px  0   rgba(0,0,0,.12);
+      transition: background-color .25s cubic-bezier(.4,0,.2,1),
+                  box-shadow .25s cubic-bezier(.4,0,.2,1);
     }
 
-    .card a:hover { background: #1d4ed8; }
+    .card a:hover {
+      background: #1565c0;
+      box-shadow: 0 2px 4px -1px rgba(0,0,0,.2),
+                  0 4px 5px  0   rgba(0,0,0,.14),
+                  0 1px 10px 0   rgba(0,0,0,.12);
+    }
 
     footer {
-      margin-top: 56px;
-      font-size: 13px;
-      color: #94a3b8;
+      margin-top: auto;
+      padding: 16px;
+      font-size: .75rem;
+      color: rgba(0,0,0,.38);
       text-align: center;
     }
   </style>
 </head>
 <body>
 
-  <header>
-    <div class="badge">道路工程分析</div>
-    <h1>AC 工具集</h1>
+  <div class="appbar">
+    <span class="appbar-title">AC 工具集</span>
+  </div>
+
+  <div class="hero">
+    <h1>道路工程分析工具</h1>
     <p>瀝青混凝土施工計算工具，適用於刨鋪、縱坡設計與地形測量作業。</p>
-  </header>
+  </div>
 
   <div class="grid">
 
     <div class="card">
-      <div class="card-icon blue">📐</div>
-      <h2>斷面分析</h2>
+      <div class="card-header">
+        <div class="avatar blue">📐</div>
+        <h2>斷面分析</h2>
+      </div>
       <p>輸入橫斷面里程與高程，自動計算刨除／舖築面積、體積與平均厚度，並產生分布圖與高程折線圖。支援雲端儲存。</p>
-      <a href="AC-斷面分析/">開啟工具 →</a>
+      <a href="AC-斷面分析/">開啟</a>
     </div>
 
     <div class="card">
-      <div class="card-icon green">📈</div>
-      <h2>縱坡計算</h2>
+      <div class="card-header">
+        <div class="avatar green">📈</div>
+        <h2>縱坡計算</h2>
+      </div>
       <p>依據里程與設計高程計算縱坡坡度、坡長與豎曲線，協助道路縱斷面設計與複核。</p>
-      <a href="AC-縱坡/">開啟工具 →</a>
+      <a href="AC-縱坡/">開啟</a>
     </div>
 
     <div class="card">
-      <div class="card-icon amber">🗺️</div>
-      <h2>地形測量 (DTM)</h2>
+      <div class="card-header">
+        <div class="avatar amber">🗺️</div>
+        <h2>地形測量 (DTM)</h2>
+      </div>
       <p>匯入測量座標點，以 IDW 插值法產生地形熱圖，並批次抽取任意橫斷面高程剖面。支援 CAD 中心線匯入。</p>
-      <a href="AC-地形測量/">開啟工具 →</a>
+      <a href="AC-地形測量/">開啟</a>
     </div>
 
   </div>
 
-  <footer>
-    J3R Engineering &nbsp;·&nbsp; AC 工具集
-  </footer>
+  <footer>J3R Engineering · AC 工具集</footer>
 
 </body>
 </html>

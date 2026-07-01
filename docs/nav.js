@@ -22,18 +22,29 @@
     }
   }
 
-  // 樣式：所有 class 都加 acnav- 前綴，避免和各工具自己的 CSS 衝突
+  // MUI AppBar 風格樣式（所有 class 加 acnav- 前綴避免衝突）
   var css =
     '.acnav-bar{position:sticky;top:0;left:0;right:0;z-index:9999;display:flex;flex-wrap:wrap;' +
-    'align-items:center;gap:6px;padding:8px 14px;background:#1f2937;' +
-    'box-shadow:0 2px 6px rgba(0,0,0,.15);font-family:"Inter","Noto Sans TC",sans-serif;}' +
-    '.acnav-title{color:#fff;font-weight:700;font-size:15px;margin-right:10px;white-space:nowrap;}' +
-    '.acnav-link{color:#d1d5db;text-decoration:none;font-size:14px;font-weight:500;' +
-    'padding:6px 14px;border-radius:9999px;transition:background .15s,color .15s;white-space:nowrap;}' +
-    '.acnav-link:hover{background:#374151;color:#fff;}' +
-    '.acnav-active{background:#3b82f6;color:#fff;cursor:default;}' +
-    '.acnav-home{color:#9ca3af !important;}' +
-    '.acnav-sep{width:1px;height:18px;background:#374151;margin:0 4px;flex-shrink:0;}';
+    'align-items:center;gap:4px;padding:0 16px;min-height:56px;background:#1976d2;' +
+    'box-shadow:0 2px 4px -1px rgba(0,0,0,.2),0 4px 5px 0 rgba(0,0,0,.14),0 1px 10px 0 rgba(0,0,0,.12);' +
+    'font-family:"Roboto","Noto Sans TC",sans-serif;}' +
+
+    '.acnav-title{color:#fff;font-weight:500;font-size:20px;letter-spacing:.0075em;' +
+    'margin-right:12px;white-space:nowrap;}' +
+
+    '.acnav-link{color:rgba(255,255,255,.7);text-decoration:none;' +
+    'font-size:.875rem;font-weight:500;letter-spacing:.02857em;text-transform:uppercase;' +
+    'padding:8px 12px;border-radius:4px;' +
+    'transition:background-color .2s cubic-bezier(.4,0,.2,1),color .2s;white-space:nowrap;}' +
+
+    '.acnav-link:hover{background:rgba(255,255,255,.08);color:#fff;}' +
+
+    '.acnav-active{background:rgba(255,255,255,.15);color:#fff;cursor:default;}' +
+
+    '.acnav-home{color:rgba(255,255,255,.7);}' +
+
+    '.acnav-sep{width:1px;height:20px;background:rgba(255,255,255,.2);margin:0 8px;flex-shrink:0;}';
+
   var style = document.createElement('style');
   style.textContent = css;
   document.head.appendChild(style);
