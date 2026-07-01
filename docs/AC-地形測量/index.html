@@ -1773,5 +1773,23 @@
         window.onload = () => { app.init(); };
     </script>
     <script src="../nav.js" defer></script>
+
+    <!-- 手機警告橫幅 -->
+    <style>
+      #mobile-warn {
+        display: none;
+        position: fixed; bottom: 0; left: 0; right: 0; z-index: 99999;
+        background: #92400e; color: #fef3c7;
+        font-family: 'Inter','Noto Sans TC',sans-serif;
+        font-size: 14px; font-weight: 500;
+        padding: 14px 20px;
+        text-align: center;
+        box-shadow: 0 -2px 8px rgba(0,0,0,.3);
+      }
+      @media (max-width: 768px) { #mobile-warn { display: block; } }
+    </style>
+    <div id="mobile-warn">
+      ⚠️ 此工具需使用電腦操作（需滑鼠與較大螢幕），手機上功能將無法正常使用。
+    </div>
 </body>
 </html>
