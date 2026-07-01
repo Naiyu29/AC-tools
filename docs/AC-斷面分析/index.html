@@ -139,6 +139,7 @@
         </div>
         
         <div id="error-message" class="text-center text-red-500 font-medium my-4"></div>
+        <div id="warning-message" class="hidden text-sm bg-amber-50 border border-amber-300 text-amber-800 rounded-lg px-4 py-3 my-2 whitespace-pre-wrap"></div>
 
         <!-- 結果顯示區 -->
         <div id="results-container" class="space-y-8">
@@ -507,11 +508,26 @@
             // --- Core Logic ---
             function parseData(dataString) {
                 const dataMap = {};
-                if (!dataString || dataString.trim() === '') return dataMap;
-                dataString.trim().split('\n').forEach((line, index) => {
+                const skipped = [];
+                if (!dataString || dataString.trim() === '') return { dataMap, skipped };
+
+                // 正規化：全形字元、逗號、Tab → 半形空格
+                const normalized = dataString
+                    .replace(/　/g, ' ')
+                    .replace(/[，、,]/g, ' ')
+                    .replace(/\t/g, ' ')
+                    .replace(/[！-～]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0));
+
+                normalized.trim().split('\n').forEach((line, index) => {
                     if (line.trim() === '') return;
-                    const values = line.split(/\s+/).filter(v => v.trim() !== '' && !isNaN(v)).map(Number);
-                    if (values.length < 3) return;
+                    const rawTokens = line.trim().split(/\s+/);
+                    // 第一個 token 不是數字 → 文字標題行，靜默跳過
+                    if (isNaN(rawTokens[0]) || rawTokens[0] === '') return;
+                    const values = rawTokens.filter(v => v !== '' && !isNaN(v)).map(Number);
+                    if (values.length < 3) {
+                        skipped.push(`第 ${index + 1} 行（「${line.trim().substring(0, 30)}」）：數值不足，已略過`);
+                        return;
+                    }
                     const mileage = values.shift();
                     let found = false;
                     for (let k = Math.floor(values.length / 2); k >= 1; k--) {
@@ -527,24 +543,30 @@
                         }
                     }
                     if (!found && values.length % 2 === 0) {
-                         const k = values.length / 2;
-                         const elevations = values.slice(0, k);
-                         const offsets = values.slice(k);
-                         dataMap[mileage] = Array.from({length: k}, (_, i) => ({ x: offsets[i], y: elevations[i] })).sort((a, b) => a.x - b.x);
+                        const k = values.length / 2;
+                        const elevations = values.slice(0, k);
+                        const offsets = values.slice(k);
+                        dataMap[mileage] = Array.from({length: k}, (_, i) => ({ x: offsets[i], y: elevations[i] })).sort((a, b) => a.x - b.x);
                     } else if (!found) {
-                         console.warn(`無法解析第 ${index + 1} 行資料: "${line}"。`);
+                        skipped.push(`第 ${index + 1} 行（「${line.trim().substring(0, 30)}」）：格式無法辨識，已略過`);
                     }
                 });
-                return dataMap;
+                return { dataMap, skipped };
             }
             
             function processData() {
                 document.getElementById('error-message').textContent = '';
+                const warningEl = document.getElementById('warning-message');
+                warningEl.textContent = '';
+                warningEl.classList.add('hidden');
+                const allSkipped = [];
                 try {
                     // 1. Always parse Ground and Paved data first.
                     if (!document.getElementById('section1Data').value.trim()) throw new Error("斷面 1 為必填欄位。");
-                    dataMap1 = parseData(document.getElementById('section1Data').value);
-                    dataMap3 = parseData(document.getElementById('section3Data').value);
+                    ({ dataMap: dataMap1, skipped: skipped1 } = parseData(document.getElementById('section1Data').value));
+                    allSkipped.push(...skipped1.map(s => '[斷面1] ' + s));
+                    ({ dataMap: dataMap3, skipped: skipped3 } = parseData(document.getElementById('section3Data').value));
+                    allSkipped.push(...skipped3.map(s => '[斷面3] ' + s));
 
                     // 2. Determine how to get Milling data (dataMap2).
                     const section2Method = document.querySelector('input[name="section2Method"]:checked').value;
@@ -571,13 +593,18 @@
                             }
                         }
                     } else {
-                        dataMap2 = parseData(document.getElementById('section2Data').value);
+                        ({ dataMap: dataMap2, skipped: skipped2 } = parseData(document.getElementById('section2Data').value));
+                        allSkipped.push(...skipped2.map(s => '[斷面2] ' + s));
                     }
 
                     // 3. Continue with the rest of the analysis.
                     const mileageSet = new Set([...Object.keys(dataMap1), ...Object.keys(dataMap2), ...Object.keys(dataMap3)]);
                     allSortedMileages = Array.from(mileageSet).map(Number).sort((a, b) => b - a);
                     if (allSortedMileages.length === 0) throw new Error("未解析出有效的里程資料。請檢查資料格式。");
+                    if (allSkipped.length > 0) {
+                        warningEl.textContent = '⚠️ 以下行已略過（不影響其他資料）：\n' + allSkipped.join('\n');
+                        warningEl.classList.remove('hidden');
+                    }
                     
                     const selector = document.getElementById('mileageSelector');
                     selector.innerHTML = '';
