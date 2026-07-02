@@ -8,6 +8,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-annotation/1.4.0/chartjs-plugin-annotation.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Inter', 'Noto Sans TC', sans-serif; }
@@ -29,6 +30,22 @@
         .modal-backdrop.visible { opacity: 1; visibility: visible; }
         .modal-content { background: white; padding: 2rem; border-radius: 0.5rem; box-shadow: 0 10px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1); width: 90%; max-width: 500px; transform: scale(0.95); transition: transform 0.3s; }
         .modal-backdrop.visible .modal-content { transform: scale(1); }
+
+        /* 卡片管理 */
+        .card-close-btn { background:none; border:none; cursor:pointer; color:#9ca3af; font-size:13px; padding:2px 5px; border-radius:4px; line-height:1; margin-left:8px; flex-shrink:0; }
+        .card-close-btn:hover { color:#ef4444; background:#fee2e2; }
+        .card-sortable-ghost { opacity:.35; background:#e0e7ff !important; }
+        .collapsible-header { user-select:none; }
+        /* 浮動按鈕 */
+        .fab { position:fixed; right:16px; z-index:9998; width:42px; height:42px; border-radius:9999px; background:#fff; border:1px solid #e2e8f0; box-shadow:0 2px 8px rgba(0,0,0,.12); display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:18px; transition:background .15s; }
+        .fab:hover { background:#f8fafc; }
+        #back-to-top { bottom:72px; }
+        #settings-fab { bottom:20px; }
+        #settings-panel { position:fixed; bottom:70px; right:62px; width:200px; background:#fff; border-radius:12px; box-shadow:0 8px 32px rgba(0,0,0,.15); border:1px solid #e2e8f0; padding:12px; z-index:9999; }
+        #settings-panel p { font-size:11px; font-weight:600; color:#94a3b8; text-transform:uppercase; letter-spacing:.05em; margin-bottom:8px; }
+        #settings-panel label { display:flex; align-items:center; gap:8px; font-size:13px; color:#374151; padding:5px 4px; border-radius:6px; cursor:pointer; }
+        #settings-panel label:hover { background:#f1f5f9; }
+        #settings-panel input[type=checkbox] { accent-color:#2563eb; width:14px; height:14px; cursor:pointer; }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800">
@@ -43,7 +60,7 @@
             <span class="text-gray-400">正在連線…</span>
         </div>
 
-        <div class="data-card mb-8">
+        <div id="intro-section-card" class="data-card mb-8">
              <div class="collapsible-header flex justify-between items-center">
                 <h3 class="text-2xl font-bold text-gray-800">核心功能與操作</h3>
                 <svg class="chevron-icon w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
@@ -59,7 +76,7 @@
             </div>
         </div>
 
-        <div class="data-card mb-8">
+        <div id="saved-section-card" class="data-card mb-8">
              <div class="collapsible-header flex justify-between items-center">
                 <h3 class="text-2xl font-bold text-gray-800">儲存的分析紀錄</h3>
                 <svg class="chevron-icon w-6 h-6 text-gray-600 rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
@@ -141,11 +158,6 @@
         
         <div id="error-message" class="text-center text-red-500 font-medium my-4"></div>
         <div id="warning-message" class="hidden text-sm bg-amber-50 border border-amber-300 text-amber-800 rounded-lg px-4 py-3 my-2 whitespace-pre-wrap"></div>
-
-        <div id="back-to-input-bar" class="hidden flex justify-between items-center bg-white rounded-lg shadow px-5 py-3 mb-2 border border-blue-100">
-            <span class="text-sm text-gray-500">✅ 分析完成，輸入區已收合</span>
-            <button id="backToInputBtn" class="text-blue-600 hover:text-blue-800 font-semibold text-sm">↩ 回到輸入區</button>
-        </div>
 
         <!-- 結果顯示區 -->
         <div id="results-container" class="space-y-8">
@@ -230,6 +242,7 @@
         document.addEventListener('DOMContentLoaded', () => {
             // --- 全域變數 ---
             let charts = {}, dataMap1 = {}, dataMap2 = {}, dataMap3 = {}, allSortedMileages = [];
+            const userHiddenCards = new Set();
             let analysisPair = { a: 1, b: 2 }; 
             let summaryAnalysisPair = { a: 1, b: 2 };
             let db, auth;
@@ -615,11 +628,13 @@
                     const selector = document.getElementById('mileageSelector');
                     selector.innerHTML = '';
                     allSortedMileages.forEach(mileage => selector.add(new Option(mileage, mileage)));
-                    document.querySelectorAll('#results-container > .data-card').forEach(card => card.classList.remove('hidden'));
+                    document.querySelectorAll('#results-container > .data-card').forEach(card => {
+                        if (!userHiddenCards.has(card.id)) card.classList.remove('hidden');
+                    });
                     renderAnalysisSelectors();
                     runAllAnalyses();
 
-                    // 分析成功：收合輸入區，顯示「回到輸入」按鈕，捲動到結果
+                    // 分析成功：收合輸入區，捲動到結果
                     const inputCard = document.getElementById('input-section-card');
                     if (inputCard) {
                         const content = inputCard.querySelector('.collapsible-content');
@@ -629,8 +644,7 @@
                             icon && icon.classList.remove('rotate-180');
                         }
                     }
-                    document.getElementById('back-to-input-bar').classList.remove('hidden');
-                    document.getElementById('back-to-input-bar').scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    document.getElementById('results-container').scrollIntoView({ behavior: 'smooth', block: 'start' });
 
                 } catch (error) {
                      document.getElementById('error-message').textContent = `錯誤: ${error.message}`;
@@ -1177,18 +1191,6 @@
                 }
             } catch(e) { /* 忽略無效的 hash */ }
 
-            document.getElementById('backToInputBtn').addEventListener('click', () => {
-                const inputCard = document.getElementById('input-section-card');
-                if (inputCard) {
-                    const content = inputCard.querySelector('.collapsible-content');
-                    const icon = inputCard.querySelector('.chevron-icon');
-                    content && content.classList.remove('hidden');
-                    icon && icon.classList.add('rotate-180');
-                    inputCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }
-                document.getElementById('back-to-input-bar').classList.add('hidden');
-            });
-
             document.getElementById('shareButton').addEventListener('click', () => {
                 const encoded = btoa(encodeURIComponent(JSON.stringify(getFormState())));
                 const url = location.origin + location.pathname + '#state=' + encoded;
@@ -1204,10 +1206,95 @@
             document.getElementById('sort-by').addEventListener('change', loadSavedAnalyses);
             setupCollapsibleSections();
             setupSection2MethodToggle();
-            setupSummaryCalcMethodToggle(); 
+            setupSummaryCalcMethodToggle();
             updateFooterInfo();
+
+            // ===== 卡片管理 =====
+            const cardRegistry = [
+                { id: 'intro-section-card',  label: '核心功能與操作' },
+                { id: 'saved-section-card',  label: '儲存的分析紀錄' },
+                { id: 'input-section-card',  label: '資料輸入區' },
+                { id: 'individual-results',  label: '個別斷面分析' },
+                { id: 'all-mileage-card',    label: '全里程斷面' },
+                { id: 'summary-results',     label: '刨鋪厚度計算' },
+                { id: 'volume-summary-card', label: '刨除量及舖築量分析' },
+            ];
+
+            // 建立設定選單 checkbox 清單
+            const settingsPanel = document.getElementById('settings-panel');
+            cardRegistry.forEach(cfg => {
+                const lbl = document.createElement('label');
+                lbl.innerHTML = `<input type="checkbox" id="cb-${cfg.id}" checked> ${cfg.label}`;
+                settingsPanel.appendChild(lbl);
+                document.getElementById('cb-' + cfg.id).addEventListener('change', e => {
+                    const card = document.getElementById(cfg.id);
+                    if (!card) return;
+                    if (e.target.checked) { card.classList.remove('hidden'); userHiddenCards.delete(cfg.id); }
+                    else                  { card.classList.add('hidden');    userHiddenCards.add(cfg.id); }
+                });
+            });
+
+            function syncCheckboxes() {
+                cardRegistry.forEach(cfg => {
+                    const cb = document.getElementById('cb-' + cfg.id);
+                    if (cb) cb.checked = !userHiddenCards.has(cfg.id);
+                });
+            }
+
+            // 在每個卡片 header 加 ✕ 按鈕
+            cardRegistry.forEach(cfg => {
+                const card = document.getElementById(cfg.id);
+                if (!card) return;
+                const header = card.querySelector('.collapsible-header');
+                if (!header) return;
+                const btn = document.createElement('button');
+                btn.className = 'card-close-btn';
+                btn.title = '隱藏此區塊';
+                btn.textContent = '✕';
+                btn.addEventListener('click', e => {
+                    e.stopPropagation();
+                    card.classList.add('hidden');
+                    userHiddenCards.add(cfg.id);
+                    syncCheckboxes();
+                });
+                header.appendChild(btn);
+            });
+
+            // ⚙️ 設定選單開關
+            const settingsFab = document.getElementById('settings-fab');
+            settingsFab.addEventListener('click', e => {
+                e.stopPropagation();
+                settingsPanel.classList.toggle('hidden');
+            });
+            document.addEventListener('click', () => settingsPanel.classList.add('hidden'));
+            settingsPanel.addEventListener('click', e => e.stopPropagation());
+
+            // ↑ 回到頂部
+            const topBtn = document.getElementById('back-to-top');
+            window.addEventListener('scroll', () => {
+                topBtn.classList.toggle('hidden', window.scrollY < 300);
+            });
+            topBtn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+
+            // 拖曳排序（結果卡片）
+            if (typeof Sortable !== 'undefined') {
+                new Sortable(document.getElementById('results-container'), {
+                    animation: 150,
+                    handle: '.collapsible-header',
+                    filter: '.card-close-btn',
+                    ghostClass: 'card-sortable-ghost',
+                });
+            }
         });
     </script>
     <script src="../nav.js" defer></script>
+
+    <!-- 浮動按鈕 -->
+    <button id="back-to-top" class="fab hidden" title="回到頂部">↑</button>
+    <button id="settings-fab" class="fab" title="顯示/隱藏區塊">⚙️</button>
+    <div id="settings-panel" class="hidden">
+        <p>顯示 / 隱藏區塊</p>
+        <!-- 由 JS 填入 -->
+    </div>
 </body>
 </html>
