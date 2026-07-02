@@ -78,7 +78,7 @@
             </div>
         </div>
 
-        <div class="data-card mb-8">
+        <div id="input-section-card" class="data-card mb-8">
             <div class="collapsible-header flex justify-between items-center">
                 <h3 class="text-2xl font-bold text-gray-800">資料輸入區</h3>
                 <svg class="chevron-icon w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
@@ -141,6 +141,11 @@
         
         <div id="error-message" class="text-center text-red-500 font-medium my-4"></div>
         <div id="warning-message" class="hidden text-sm bg-amber-50 border border-amber-300 text-amber-800 rounded-lg px-4 py-3 my-2 whitespace-pre-wrap"></div>
+
+        <div id="back-to-input-bar" class="hidden flex justify-between items-center bg-white rounded-lg shadow px-5 py-3 mb-2 border border-blue-100">
+            <span class="text-sm text-gray-500">✅ 分析完成，輸入區已收合</span>
+            <button id="backToInputBtn" class="text-blue-600 hover:text-blue-800 font-semibold text-sm">↩ 回到輸入區</button>
+        </div>
 
         <!-- 結果顯示區 -->
         <div id="results-container" class="space-y-8">
@@ -613,6 +618,20 @@
                     document.querySelectorAll('#results-container > .data-card').forEach(card => card.classList.remove('hidden'));
                     renderAnalysisSelectors();
                     runAllAnalyses();
+
+                    // 分析成功：收合輸入區，顯示「回到輸入」按鈕，捲動到結果
+                    const inputCard = document.getElementById('input-section-card');
+                    if (inputCard) {
+                        const content = inputCard.querySelector('.collapsible-content');
+                        const icon = inputCard.querySelector('.chevron-icon');
+                        if (content && !content.classList.contains('hidden')) {
+                            content.classList.add('hidden');
+                            icon && icon.classList.remove('rotate-180');
+                        }
+                    }
+                    document.getElementById('back-to-input-bar').classList.remove('hidden');
+                    document.getElementById('back-to-input-bar').scrollIntoView({ behavior: 'smooth', block: 'start' });
+
                 } catch (error) {
                      document.getElementById('error-message').textContent = `錯誤: ${error.message}`;
                      document.querySelectorAll('#results-container > .data-card').forEach(card => card.classList.add('hidden'));
@@ -1157,6 +1176,18 @@
                     applyFormState(decoded);
                 }
             } catch(e) { /* 忽略無效的 hash */ }
+
+            document.getElementById('backToInputBtn').addEventListener('click', () => {
+                const inputCard = document.getElementById('input-section-card');
+                if (inputCard) {
+                    const content = inputCard.querySelector('.collapsible-content');
+                    const icon = inputCard.querySelector('.chevron-icon');
+                    content && content.classList.remove('hidden');
+                    icon && icon.classList.add('rotate-180');
+                    inputCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+                document.getElementById('back-to-input-bar').classList.add('hidden');
+            });
 
             document.getElementById('shareButton').addEventListener('click', () => {
                 const encoded = btoa(encodeURIComponent(JSON.stringify(getFormState())));
