@@ -48,8 +48,11 @@
         /* 浮動按鈕 */
         .fab { position:fixed; right:16px; z-index:9998; width:42px; height:42px; border-radius:9999px; background:#fff; border:1px solid #e2e8f0; box-shadow:0 2px 8px rgba(0,0,0,.12); display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:18px; transition:background .15s; }
         .fab:hover { background:#f8fafc; }
-        #back-to-top { bottom:72px; }
         #settings-fab { bottom:20px; }
+        #share-fab { bottom:72px; }
+        #back-to-top { bottom:124px; }
+        #share-toast { position:fixed; right:66px; bottom:74px; z-index:9999; background:#1e293b; color:#fff; font-size:13px; font-weight:500; padding:8px 14px; border-radius:8px; box-shadow:0 4px 16px rgba(0,0,0,.2); white-space:nowrap; opacity:0; transform:translateX(8px); pointer-events:none; transition:opacity .2s, transform .2s; }
+        #share-toast.show { opacity:1; transform:translateX(0); }
         #settings-panel { position:fixed; bottom:70px; right:62px; width:200px; background:#fff; border-radius:12px; box-shadow:0 8px 32px rgba(0,0,0,.15); border:1px solid #e2e8f0; padding:12px; z-index:9999; }
         #settings-panel p { font-size:11px; font-weight:600; color:#94a3b8; text-transform:uppercase; letter-spacing:.05em; margin-bottom:8px; }
         #settings-panel label { display:flex; align-items:center; gap:8px; font-size:13px; color:#374151; padding:5px 4px; border-radius:6px; cursor:pointer; }
@@ -162,7 +165,6 @@
                     <button id="saveButton" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg shadow-lg">儲存結果</button>
                     <button id="exportButton" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-lg shadow-lg">匯出資料</button>
                     <button id="importButton" class="bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 px-6 rounded-lg shadow-lg">匯入資料</button>
-                    <button id="shareButton" class="bg-slate-600 hover:bg-slate-700 text-white font-bold py-3 px-6 rounded-lg shadow-lg">🔗 分享此資料</button>
                     <input type="file" id="fileInput" class="hidden" accept=".json">
                 </div>
             </div>
@@ -1322,22 +1324,29 @@
                 } catch(e) { console.warn('無法載入分享資料', e); }
             })();
 
-            document.getElementById('shareButton').addEventListener('click', async () => {
-                const btn = document.getElementById('shareButton');
-                const orig = btn.textContent;
-                btn.textContent = '⏳ 產生連結…';
+            document.getElementById('share-fab').addEventListener('click', async () => {
+                const btn = document.getElementById('share-fab');
+                const toast = document.getElementById('share-toast');
+                const showToast = (msg) => {
+                    toast.textContent = msg;
+                    toast.classList.add('show');
+                    setTimeout(() => toast.classList.remove('show'), 2500);
+                };
+                btn.textContent = '⏳';
                 btn.disabled = true;
                 try {
                     const ref = doc(collection(db, 'shares'));
                     await setDoc(ref, getFormState());
                     const url = location.origin + location.pathname + '#s=' + ref.id;
                     await navigator.clipboard.writeText(url);
-                    btn.textContent = '✅ 已複製連結！';
+                    btn.textContent = '✅';
+                    showToast('✅ 已複製連結，可貼給同事');
                 } catch(e) {
-                    btn.textContent = '❌ 失敗，請重試';
+                    btn.textContent = '❌';
+                    showToast('❌ 產生失敗，請重試');
                     console.error(e);
                 }
-                setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 2500);
+                setTimeout(() => { btn.textContent = '🔗'; btn.disabled = false; }, 2500);
             });
             document.getElementById('mileageSelector').addEventListener('change', updateIndividualDisplay);
             document.getElementById('summaryButton').addEventListener('click', generateSummaryReport);
@@ -1497,7 +1506,9 @@
 
     <!-- 浮動按鈕 -->
     <button id="back-to-top" class="fab hidden" title="回到頂部">↑</button>
+    <button id="share-fab" class="fab" title="分享此資料（含畫面狀態）">🔗</button>
     <button id="settings-fab" class="fab" title="顯示/隱藏區塊">⚙️</button>
+    <div id="share-toast"></div>
     <div id="settings-panel" class="hidden"></div>
 </body>
 </html>
