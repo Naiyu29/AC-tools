@@ -110,12 +110,12 @@
             </div>
             <div class="collapsible-content mt-6 space-y-6 hidden">
                 <div class="data-card">
-                    <input type="text" id="section1Name" class="input-title mb-1" value="原地面">
-                    <p class="text-sm text-gray-500 mb-3">刨除作業前，現有路面的量測高程。</p>
+                    <input type="text" id="section1Name" class="input-title mb-1" placeholder="原地面">
+                    <p class="text-sm text-gray-500 mb-3">刨除作業前，現有路面的量測高程。<span class="text-blue-600">若只需分析「刨除後 → 舖築後」，此欄可留空。</span></p>
                     <textarea id="section1Data" class="w-full h-48 p-3 border border-gray-300 rounded-md" placeholder="格式: 里程 ... 高程... 支距..."></textarea>
                 </div>
                  <div class="data-card">
-                    <input type="text" id="section2Name" class="input-title mb-1" value="刨除後">
+                    <input type="text" id="section2Name" class="input-title mb-1" placeholder="刨除後">
                     <p class="text-sm text-gray-500 mb-3">刨除完成後的路面高程。可手動輸入，或選擇「依厚度計算」由原地面自動推算。</p>
                     <div class="flex gap-4 mb-3">
                         <div>
@@ -152,7 +152,7 @@
                     </div>
                 </div>
                 <div class="data-card">
-                    <input type="text" id="section3Name" class="input-title extra mb-1" value="舖築後">
+                    <input type="text" id="section3Name" class="input-title extra mb-1" placeholder="舖築後">
                     <p class="text-sm text-gray-500 mb-3">AC 舖築完成後的路面高程（選填）。填入後可計算舖築量及與刨除後的高程差。</p>
                     <textarea id="section3Data" class="w-full h-48 p-3 border border-gray-300 rounded-md" placeholder="格式: 里程 高程... 支距... (選填)"></textarea>
                 </div>
@@ -257,7 +257,14 @@
             let analysisPair = { a: 1, b: 2 }; 
             let summaryAnalysisPair = { a: 1, b: 2 };
             let db, auth;
-            let unsubscribe; 
+            let unsubscribe;
+
+            // 取得斷面名稱：空白時回退到 placeholder 的預設名稱
+            function sectionName(id) {
+                const el = document.getElementById(id);
+                if (!el) return '';
+                return (el.value.trim() || el.placeholder || '').trim();
+            }
 
             // --- Modal ---
             const modal = {
@@ -368,7 +375,7 @@
                     modal.show({ title: '需要登入', message: '請先用頁面上方的「使用 Google 登入」按鈕登入，才能儲存到雲端。', type: 'alert' });
                     return;
                 }
-                const defaultName = `${document.getElementById('section1Name').value} vs ${document.getElementById('section2Name').value}`;
+                const defaultName = `${sectionName('section1Name')} vs ${sectionName('section2Name')}`;
                 const description = await modal.show({ title: '儲存分析紀錄', message: '請為此分析紀錄命名：', type: 'prompt', defaultValue: defaultName });
                 
                 if (!description) return; 
@@ -378,7 +385,7 @@
                     creatorEmail: auth.currentUser.email || '',
                     createdAt: new Date(),
                     description: description,
-                    n1: document.getElementById('section1Name').value, n2: document.getElementById('section2Name').value, n3: document.getElementById('section3Name').value,
+                    n1: sectionName('section1Name'), n2: sectionName('section2Name'), n3: sectionName('section3Name'),
                     d1: document.getElementById('section1Data').value, d2: document.getElementById('section2Data').value, d3: document.getElementById('section3Data').value,
                     c: document.getElementById('customOffsets').value, ap: analysisPair
                 };
@@ -489,11 +496,11 @@
             // --- Import / Export ---
             function exportData() {
                 const dataToExport = {
-                    n1: document.getElementById('section1Name').value,
+                    n1: sectionName('section1Name'),
                     d1: document.getElementById('section1Data').value,
-                    n2: document.getElementById('section2Name').value,
+                    n2: sectionName('section2Name'),
                     d2: document.getElementById('section2Data').value,
-                    n3: document.getElementById('section3Name').value,
+                    n3: sectionName('section3Name'),
                     d3: document.getElementById('section3Data').value,
                     c: document.getElementById('customOffsets').value,
                 };
@@ -701,10 +708,10 @@
                 if (charts[chartId]) charts[chartId].destroy();
                 const datasets = [];
                 if (p1 && p1.length > 0) {
-                    datasets.push({ label: document.getElementById('section1Name').value, data: p1, borderColor: 'rgb(59, 130, 246)', tension: 0.1, fill: false, pointRadius: 5 });
+                    datasets.push({ label: sectionName('section1Name'), data: p1, borderColor: 'rgb(59, 130, 246)', tension: 0.1, fill: false, pointRadius: 5 });
                 }
                 if (p2 && p2.length > 0) {
-                    datasets.push({ label: document.getElementById('section2Name').value, data: p2, borderColor: 'rgb(239, 68, 68)', tension: 0.1, fill: false, pointRadius: 5 });
+                    datasets.push({ label: sectionName('section2Name'), data: p2, borderColor: 'rgb(239, 68, 68)', tension: 0.1, fill: false, pointRadius: 5 });
                 }
                 if (p3 && p3.length > 0) {
                     datasets.push({ label: document.getElementById('section3Name').value, data: p3, borderColor: 'rgb(34, 197, 94)', tension: 0.1, fill: false, pointRadius: 5, borderDash: [5, 5] });
@@ -1214,8 +1221,10 @@
             // 頁面載入時：若 hash 有 s=<id> 就從 Firestore 讀取
             (async () => {
                 const hash = location.hash.slice(1);
+                if (hash.startsWith('state=')) { history.replaceState(null, '', location.pathname + location.search); return; }
                 if (!hash.startsWith('s=')) return;
                 const shareId = hash.slice(2);
+                history.replaceState(null, '', location.pathname + location.search);
                 if (!shareId || !db) return;
                 try {
                     const snap = await getDoc(doc(db, 'shares', shareId));
