@@ -244,7 +244,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getFirestore, collection, addDoc, query, onSnapshot, orderBy, doc, getDoc, deleteDoc, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, query, onSnapshot, orderBy, doc, getDoc, setDoc, deleteDoc, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 
         document.addEventListener('DOMContentLoaded', () => {
@@ -1165,7 +1165,7 @@
             document.getElementById('importButton').addEventListener('click', () => document.getElementById('fileInput').click());
             document.getElementById('fileInput').addEventListener('change', importData);
 
-            // --- 分享此資料（URL 狀態） ---
+            // --- 分享此資料（Firestore 短連結） ---
             function getFormState() {
                 return {
                     s1n: document.getElementById('section1Name').value,
@@ -1190,24 +1190,35 @@
                 if (state.s3n !== undefined) document.getElementById('section3Name').value = state.s3n;
                 if (state.s3d !== undefined) document.getElementById('section3Data').value = state.s3d;
             }
-            // 頁面載入時還原 URL 狀態
-            try {
-                const hash = location.hash.slice(1);
-                if (hash.startsWith('state=')) {
-                    const decoded = JSON.parse(decodeURIComponent(atob(hash.slice(6))));
-                    applyFormState(decoded);
-                }
-            } catch(e) { /* 忽略無效的 hash */ }
 
-            document.getElementById('shareButton').addEventListener('click', () => {
-                const encoded = btoa(encodeURIComponent(JSON.stringify(getFormState())));
-                const url = location.origin + location.pathname + '#state=' + encoded;
-                navigator.clipboard.writeText(url).then(() => {
-                    const btn = document.getElementById('shareButton');
-                    const orig = btn.textContent;
+            // 頁面載入時：若 hash 有 s=<id> 就從 Firestore 讀取
+            (async () => {
+                const hash = location.hash.slice(1);
+                if (!hash.startsWith('s=')) return;
+                const shareId = hash.slice(2);
+                if (!shareId || !db) return;
+                try {
+                    const snap = await getDoc(doc(db, 'shares', shareId));
+                    if (snap.exists()) applyFormState(snap.data());
+                } catch(e) { console.warn('無法載入分享資料', e); }
+            })();
+
+            document.getElementById('shareButton').addEventListener('click', async () => {
+                const btn = document.getElementById('shareButton');
+                const orig = btn.textContent;
+                btn.textContent = '⏳ 產生連結…';
+                btn.disabled = true;
+                try {
+                    const ref = doc(collection(db, 'shares'));
+                    await setDoc(ref, getFormState());
+                    const url = location.origin + location.pathname + '#s=' + ref.id;
+                    await navigator.clipboard.writeText(url);
                     btn.textContent = '✅ 已複製連結！';
-                    setTimeout(() => btn.textContent = orig, 2500);
-                }).catch(() => prompt('複製此網址：', url));
+                } catch(e) {
+                    btn.textContent = '❌ 失敗，請重試';
+                    console.error(e);
+                }
+                setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 2500);
             });
             document.getElementById('mileageSelector').addEventListener('change', updateIndividualDisplay);
             document.getElementById('summaryButton').addEventListener('click', generateSummaryReport);
