@@ -227,6 +227,36 @@
                     <div><h4 id="area-table-title" class="text-xl font-semibold mb-4">各里程詳細資料</h4><div id="areaTableContainer" class="overflow-x-auto"></div></div>
                 </div>
             </div>
+            <div id="profile-card" class="data-card hidden">
+                <div class="collapsible-header flex justify-between items-center border-b pb-4 mb-6"><h3 class="text-2xl font-bold text-gray-800">縱向剖面圖（縱坡線型）</h3><svg class="chevron-icon w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg></div>
+                <div class="collapsible-content hidden space-y-6">
+                    <p class="text-sm text-gray-500">選擇某個支距，沿里程方向取出各斷面在該支距的高程，繪出縱向剖面（縱坡線型）。支距＝0 為中心線，負值為左側、正值為右側。</p>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 items-end">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">支距 (m)</label>
+                            <input type="number" id="profileOffset" value="0" step="0.1" class="w-full p-2 border border-gray-300 rounded-md">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">起始里程</label>
+                            <input type="number" id="profileFrom" step="1" class="w-full p-2 border border-gray-300 rounded-md">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">結束里程</label>
+                            <input type="number" id="profileTo" step="1" class="w-full p-2 border border-gray-300 rounded-md">
+                        </div>
+                        <div>
+                            <button id="profileDrawButton" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg">繪製剖面圖</button>
+                        </div>
+                    </div>
+                    <div class="flex flex-wrap gap-4 text-sm">
+                        <label class="flex items-center gap-2"><input type="checkbox" id="profileLayer1" checked class="accent-blue-600"> 原地面</label>
+                        <label class="flex items-center gap-2"><input type="checkbox" id="profileLayer2" checked class="accent-red-600"> 刨除後</label>
+                        <label class="flex items-center gap-2"><input type="checkbox" id="profileLayer3" checked class="accent-green-600"> 舖築後</label>
+                    </div>
+                    <div id="profile-chart-container" class="chart-container"><canvas id="profileChart"></canvas></div>
+                    <div id="profileInfo" class="text-sm text-gray-500 text-center"></div>
+                </div>
+            </div>
         </div>
     </div>
     
@@ -686,6 +716,71 @@
                 calculateAndDisplayOverallSummary();
                 displayAllMileageCharts();
                 updateIndividualDisplay();
+                setProfileRangeDefaults();
+                drawProfileChart();
+            }
+
+            // 縱向剖面圖（縱坡線型）
+            function setProfileRangeDefaults() {
+                if (!allSortedMileages.length) return;
+                const mmin = Math.min(...allSortedMileages);
+                const mmax = Math.max(...allSortedMileages);
+                document.getElementById('profileFrom').value = mmin;
+                document.getElementById('profileTo').value = mmax;
+            }
+
+            function drawProfileChart() {
+                const info = document.getElementById('profileInfo');
+                const offset = parseFloat(document.getElementById('profileOffset').value);
+                if (isNaN(offset)) { info.textContent = '請輸入有效的支距。'; return; }
+
+                let from = parseFloat(document.getElementById('profileFrom').value);
+                let to   = parseFloat(document.getElementById('profileTo').value);
+                if (isNaN(from)) from = -Infinity;
+                if (isNaN(to))   to   =  Infinity;
+                const lo = Math.min(from, to), hi = Math.max(from, to);
+
+                const mileages = allSortedMileages.filter(m => m >= lo && m <= hi).slice().sort((a, b) => a - b);
+                const layers = [
+                    { on: document.getElementById('profileLayer1').checked, map: dataMap1, name: sectionName('section1Name'), color: 'rgb(59, 130, 246)', dash: [6, 4] },
+                    { on: document.getElementById('profileLayer2').checked, map: dataMap2, name: sectionName('section2Name'), color: 'rgb(239, 68, 68)', dash: [] },
+                    { on: document.getElementById('profileLayer3').checked, map: dataMap3, name: sectionName('section3Name'), color: 'rgb(34, 197, 94)', dash: [] },
+                ];
+
+                const datasets = [];
+                layers.forEach(L => {
+                    if (!L.on || Object.keys(L.map).length === 0) return;
+                    const pts = [];
+                    mileages.forEach(m => {
+                        const section = L.map[m];
+                        if (!section || section.length === 0) return;
+                        const y = interpolate(section, offset);
+                        if (y !== null) pts.push({ x: m, y });
+                    });
+                    if (pts.length > 0) {
+                        datasets.push({ label: L.name, data: pts, borderColor: L.color, backgroundColor: L.color, tension: 0.1, fill: false, pointRadius: 3, borderDash: L.dash });
+                    }
+                });
+
+                if (charts['profileChart']) charts['profileChart'].destroy();
+                if (datasets.length === 0) {
+                    info.textContent = `在支距 ${offset} m 找不到可繪製的資料（可能超出斷面量測範圍，或該範圍內無資料）。`;
+                    return;
+                }
+                info.textContent = `支距 ${offset} m ｜里程 ${lo} ~ ${hi}（共 ${mileages.length} 個斷面）`;
+                charts['profileChart'] = new Chart(document.getElementById('profileChart'), {
+                    type: 'line',
+                    data: { datasets },
+                    options: {
+                        responsive: true, maintainAspectRatio: false,
+                        interaction: { mode: 'nearest', intersect: false },
+                        plugins: { title: { display: true, text: `縱向剖面（支距 ${offset} m）`, font: { size: 18 } } },
+                        scales: {
+                            x: { type: 'linear', title: { display: true, text: '里程' } },
+                            y: { title: { display: true, text: '高程 (m)' } }
+                        }
+                    }
+                });
             }
 
             function updateIndividualDisplay() {
@@ -1351,6 +1446,9 @@
             });
             document.getElementById('mileageSelector').addEventListener('change', updateIndividualDisplay);
             document.getElementById('summaryButton').addEventListener('click', generateSummaryReport);
+            document.getElementById('profileDrawButton').addEventListener('click', drawProfileChart);
+            ['profileOffset','profileFrom','profileTo'].forEach(id => document.getElementById(id).addEventListener('change', drawProfileChart));
+            ['profileLayer1','profileLayer2','profileLayer3'].forEach(id => document.getElementById(id).addEventListener('change', drawProfileChart));
             document.getElementById('sort-by').addEventListener('change', loadSavedAnalyses);
             setupCollapsibleSections();
             setupSection2MethodToggle();
@@ -1366,6 +1464,7 @@
                 { id: 'all-mileage-card',    label: '全里程斷面' },
                 { id: 'summary-results',     label: '刨鋪厚度計算' },
                 { id: 'volume-summary-card', label: '刨除量及舖築量分析' },
+                { id: 'profile-card',        label: '縱向剖面圖（縱坡線型）' },
             ];
 
             const settingsPanel = document.getElementById('settings-panel');
