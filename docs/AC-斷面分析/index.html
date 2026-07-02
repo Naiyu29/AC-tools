@@ -19,6 +19,7 @@
         .collapsible-content { transition: all 0.3s ease-in-out; }
         .input-title { background-color: transparent; border: none; font-size: 1.25rem; font-weight: 600; color: #374151; width: 100%; padding: 0.25rem 0.5rem; margin-left: -0.5rem; border-radius: 0.25rem; }
         .input-title:focus { outline: none; box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.5); background-color: #f9fafb; }
+        .input-title::placeholder { color: #9ca3af; font-weight: 600; opacity: 1; }
         .input-title.extra { color: #6b7280; }
         .collapsible-header { cursor: pointer; }
         .chevron-icon { transition: transform 0.3s; }
@@ -449,9 +450,9 @@
                     const docSnap = await getDoc(docRef);
                     if (docSnap.exists()) {
                         const data = docSnap.data();
-                        document.getElementById('section1Name').value = data.n1 || '斷面 1';
-                        document.getElementById('section2Name').value = data.n2 || '斷面 2';
-                        document.getElementById('section3Name').value = data.n3 || '額外斷面';
+                        document.getElementById('section1Name').value = data.n1 || '';
+                        document.getElementById('section2Name').value = data.n2 || '';
+                        document.getElementById('section3Name').value = data.n3 || '';
                         document.getElementById('section1Data').value = data.d1 || '';
                         document.getElementById('section2Data').value = data.d2 || '';
                         document.getElementById('section3Data').value = data.d3 || '';
@@ -524,11 +525,11 @@
                 reader.onload = (e) => {
                     try {
                         const data = JSON.parse(e.target.result);
-                        document.getElementById('section1Name').value = data.n1 || '原地面';
+                        document.getElementById('section1Name').value = data.n1 || '';
                         document.getElementById('section1Data').value = data.d1 || '';
-                        document.getElementById('section2Name').value = data.n2 || '刨除後';
+                        document.getElementById('section2Name').value = data.n2 || '';
                         document.getElementById('section2Data').value = data.d2 || '';
-                        document.getElementById('section3Name').value = data.n3 || '舖築後';
+                        document.getElementById('section3Name').value = data.n3 || '';
                         document.getElementById('section3Data').value = data.d3 || '';
                         document.getElementById('customOffsets').value = data.c || '';
                         modal.show({ title: '成功', message: '資料已成功匯入！', type: 'alert' });
@@ -714,7 +715,7 @@
                     datasets.push({ label: sectionName('section2Name'), data: p2, borderColor: 'rgb(239, 68, 68)', tension: 0.1, fill: false, pointRadius: 5 });
                 }
                 if (p3 && p3.length > 0) {
-                    datasets.push({ label: document.getElementById('section3Name').value, data: p3, borderColor: 'rgb(34, 197, 94)', tension: 0.1, fill: false, pointRadius: 5, borderDash: [5, 5] });
+                    datasets.push({ label: sectionName('section3Name'), data: p3, borderColor: 'rgb(34, 197, 94)', tension: 0.1, fill: false, pointRadius: 5, borderDash: [5, 5] });
                 }
                 charts[chartId] = new Chart(canvasEl, { type: 'line', data: { datasets }, options: { responsive: true, maintainAspectRatio: false, plugins: { title: { display: true, text: `里程 ${mileage} 斷面圖`, font: { size: 18 } } }, scales: { x: { type: 'linear', title: { display: true, text: '支距 (m)' } }, y: { title: { display: true, text: '高程 (m)' } } } } });
             }
@@ -749,14 +750,14 @@
                 const container = document.getElementById('differenceTableContainer');
                 const isSection3Active = p3 && p3.length > 0;
                 const sortedOffsets = [...new Set([...p1.map(p => p.x), ...p2.map(p => p.x), ...(isSection3Active ? p3.map(p => p.x) : [])])].sort((a, b) => a - b);
-                const n1 = document.getElementById('section1Name').value, n2 = document.getElementById('section2Name').value, n3 = document.getElementById('section3Name').value;
+                const n1 = sectionName('section1Name'), n2 = sectionName('section2Name'), n3 = sectionName('section3Name');
                 
                 let tableHeader = `<thead class="bg-gray-50"><tr>
                     <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">支距(m)</th>
                     <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">${n1}(m)</th>
                     <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">${n2}(m)</th>
                     ${isSection3Active ? `<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">${n3}(m)</th>` : ''}
-                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">差(${document.getElementById(`section${analysisPair.a}Name`).value} - ${document.getElementById(`section${analysisPair.b}Name`).value})(cm)</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">差(${sectionName(`section${analysisPair.a}Name`)} - ${sectionName(`section${analysisPair.b}Name`)})(cm)</th>
                     </tr></thead>`;
 
                 let tableBody = `<tbody class="bg-white divide-y divide-gray-200">`;
@@ -1093,9 +1094,9 @@
             }
 
             function renderAnalysisSelectors() {
-                const n1 = document.getElementById('section1Name').value;
-                const n2 = document.getElementById('section2Name').value;
-                const n3 = document.getElementById('section3Name').value;
+                const n1 = sectionName('section1Name');
+                const n2 = sectionName('section2Name');
+                const n3 = sectionName('section3Name');
                 const hasS3 = document.getElementById('section3Data').value.trim() !== '';
                 let selectorHTML = (pairIdPrefix, currentPair) => {
                     let html = `<div class="flex flex-wrap gap-4 justify-center">
@@ -1195,14 +1196,14 @@
             // --- 分享此資料（Firestore 短連結） ---
             function getFormState() {
                 return {
-                    s1n: document.getElementById('section1Name').value,
+                    s1n: sectionName('section1Name'),
                     s1d: document.getElementById('section1Data').value,
-                    s2n: document.getElementById('section2Name').value,
+                    s2n: sectionName('section2Name'),
                     s2d: document.getElementById('section2Data').value,
                     s2m: document.querySelector('input[name="section2Method"]:checked').value,
                     mb:  document.querySelector('input[name="millingBase"]:checked')?.value || 'ground',
                     mt:  document.getElementById('millingThickness').value,
-                    s3n: document.getElementById('section3Name').value,
+                    s3n: sectionName('section3Name'),
                     s3d: document.getElementById('section3Data').value,
                 };
             }
