@@ -1,0 +1,20 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 分析紀錄：任何人可讀、可新增/修改，只有授權者可刪除
+    match /analyses/{docId} {
+      allow read:          if true;
+      allow create, update: if true;
+      allow delete: if request.auth != null &&
+        (request.auth.token.email.matches('.*@j3r\\.com\\.tw') ||
+         request.auth.token.email == 'v8896320@gmail.com');
+    }
+
+    // 分享快照：任何人都能讀、可建立
+    match /shares/{docId} {
+      allow read:   if true;
+      allow create: if true;
+    }
+  }
+}
