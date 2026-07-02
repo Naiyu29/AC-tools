@@ -591,8 +591,7 @@
                 warningEl.classList.add('hidden');
                 const allSkipped = [];
                 try {
-                    // 1. Always parse Ground and Paved data first.
-                    if (!document.getElementById('section1Data').value.trim()) throw new Error("斷面 1 為必填欄位。");
+                    // 1. 解析各斷面（「原地面」為選填，可只做「刨除後 → 舖築後」分析）
                     let r1 = parseData(document.getElementById('section1Data').value);
                     dataMap1 = r1.dataMap; allSkipped.push(...r1.skipped.map(s => '[斷面1] ' + s));
                     let r3 = parseData(document.getElementById('section3Data').value);
@@ -625,6 +624,16 @@
                     } else {
                         let r2 = parseData(document.getElementById('section2Data').value);
                         dataMap2 = r2.dataMap; allSkipped.push(...r2.skipped.map(s => '[斷面2] ' + s));
+                    }
+
+                    // 至少需兩組斷面才能比較（例如「刨除後」與「舖築後」）
+                    const filledSections = [dataMap1, dataMap2, dataMap3].filter(m => Object.keys(m).length > 0).length;
+                    if (filledSections < 2) throw new Error("請至少輸入兩組斷面資料（例如「刨除後」與「舖築後」）才能進行比較分析。");
+
+                    // 若未輸入「原地面」，自動改以「刨除後 → 舖築後」作為預設分析組合
+                    if (Object.keys(dataMap1).length === 0 && Object.keys(dataMap3).length > 0) {
+                        analysisPair = { a: 2, b: 3 };
+                        summaryAnalysisPair = { a: 2, b: 3 };
                     }
 
                     // 3. Continue with the rest of the analysis.
@@ -678,19 +687,25 @@
                 const planingArea = calculateSectionArea(p1, p2);
                 const lowerBoundary = createLowerBoundary(p1, p2);
                 const pavingArea = calculateSectionArea(lowerBoundary, p3);
-                let areaHTML = `<span class="font-semibold text-red-600">刨除面積:</span> ${planingArea.cutArea.toFixed(3)} m²`;
-                if (p3 && p3.length > 0) {
-                     areaHTML += `&nbsp;&nbsp; <span class="font-semibold text-green-600">舖築面積:</span> ${pavingArea.fillArea.toFixed(3)} m²`;
+                const areaParts = [];
+                if (p1 && p1.length > 0) {
+                    areaParts.push(`<span class="font-semibold text-red-600">刨除面積:</span> ${planingArea.cutArea.toFixed(3)} m²`);
                 }
-                document.getElementById('areaDisplay').innerHTML = areaHTML;
+                if (p3 && p3.length > 0) {
+                    areaParts.push(`<span class="font-semibold text-green-600">舖築面積:</span> ${pavingArea.fillArea.toFixed(3)} m²`);
+                }
+                document.getElementById('areaDisplay').innerHTML = areaParts.join('&nbsp;&nbsp; ') || '—';
             }
             
             function createOrUpdateChart(chartId, canvasEl, mileage, p1, p2, p3) {
                 if (charts[chartId]) charts[chartId].destroy();
-                const datasets = [
-                    { label: document.getElementById('section1Name').value, data: p1, borderColor: 'rgb(59, 130, 246)', tension: 0.1, fill: false, pointRadius: 5 },
-                    { label: document.getElementById('section2Name').value, data: p2, borderColor: 'rgb(239, 68, 68)', tension: 0.1, fill: false, pointRadius: 5 }
-                ];
+                const datasets = [];
+                if (p1 && p1.length > 0) {
+                    datasets.push({ label: document.getElementById('section1Name').value, data: p1, borderColor: 'rgb(59, 130, 246)', tension: 0.1, fill: false, pointRadius: 5 });
+                }
+                if (p2 && p2.length > 0) {
+                    datasets.push({ label: document.getElementById('section2Name').value, data: p2, borderColor: 'rgb(239, 68, 68)', tension: 0.1, fill: false, pointRadius: 5 });
+                }
                 if (p3 && p3.length > 0) {
                     datasets.push({ label: document.getElementById('section3Name').value, data: p3, borderColor: 'rgb(34, 197, 94)', tension: 0.1, fill: false, pointRadius: 5, borderDash: [5, 5] });
                 }
@@ -799,6 +814,7 @@
 
             function calculateAndDisplayOverallSummary() {
                 let planingVolume = 0, pavingVolume = 0;
+                const hasS1 = Object.keys(dataMap1).length > 0;
                 const hasS3 = Object.keys(dataMap3).length > 0;
                 const areaDetails = [];
 
@@ -841,12 +857,15 @@
                 const totalAvgPlaningThickness = areaDetails.reduce((sum, d) => sum + d.avgPlaningThickness, 0) / (areaDetails.length || 1);
                 const totalAvgPavingThickness = areaDetails.reduce((sum, d) => sum + d.avgPavingThickness, 0) / (areaDetails.length || 1);
 
-                let volumeHTML = `
+                let volumeHTML = '';
+                if (hasS1) {
+                    volumeHTML += `
                     <div>
                         <span class="font-semibold text-red-600">總刨除量:</span> ${planingVolume.toFixed(3)} m³ <br>
                         <span class="text-sm text-gray-600">推估平均刨除厚度: ${totalAvgPlaningThickness.toFixed(2)} cm</span>
                     </div>
                 `;
+                }
                 if (hasS3) {
                     volumeHTML += `
                     <div>
@@ -860,16 +879,14 @@
                 const areaContainer = document.getElementById('areaTableContainer');
                 let table = `<table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr>
                     <th class="px-4 py-3 text-left text-xs text-gray-500 uppercase">里程</th>
-                    <th class="px-4 py-3 text-left text-xs text-gray-500 uppercase">刨除面積(m²)</th>
-                    <th class="px-4 py-3 text-left text-xs text-gray-500 uppercase">平均刨除厚度(cm)</th>
+                    ${hasS1 ? `<th class="px-4 py-3 text-left text-xs text-gray-500 uppercase">刨除面積(m²)</th><th class="px-4 py-3 text-left text-xs text-gray-500 uppercase">平均刨除厚度(cm)</th>` : ''}
                     ${hasS3 ? `<th class="px-4 py-3 text-left text-xs text-gray-500 uppercase">舖築面積(m²)</th><th class="px-4 py-3 text-left text-xs text-gray-500 uppercase">平均舖築厚度(cm)</th>` : ''}
                     </tr></thead><tbody class="bg-white divide-y divide-gray-200">`;
 
                 areaDetails.forEach(detail => {
                     table += `<tr>
                         <td class="px-4 py-4 font-semibold">${detail.mileage}</td>
-                        <td class="px-4 py-4 text-red-600">${detail.planingArea.toFixed(3)}</td>
-                        <td class="px-4 py-4 text-red-600">${detail.avgPlaningThickness.toFixed(2)}</td>
+                        ${hasS1 ? `<td class="px-4 py-4 text-red-600">${detail.planingArea.toFixed(3)}</td><td class="px-4 py-4 text-red-600">${detail.avgPlaningThickness.toFixed(2)}</td>` : ''}
                         ${hasS3 ? `<td class="px-4 py-4 text-green-600">${detail.pavingArea.toFixed(3)}</td><td class="px-4 py-4 text-green-600">${detail.avgPavingThickness.toFixed(2)}</td>` : ''}
                     </tr>`;
                 });
