@@ -1193,9 +1193,21 @@
             document.getElementById('importButton').addEventListener('click', () => document.getElementById('fileInput').click());
             document.getElementById('fileInput').addEventListener('change', importData);
 
-            // --- 分享此資料（Firestore 短連結） ---
+            // --- 分享此資料（Firestore 短連結，含畫面狀態） ---
             function getFormState() {
+                // 各卡片收合狀態
+                const collapsed = {};
+                cardRegistry.forEach(cfg => {
+                    const card = document.getElementById(cfg.id);
+                    if (!card) return;
+                    const content = card.querySelector('.collapsible-content');
+                    if (content) collapsed[cfg.id] = content.classList.contains('hidden');
+                });
+                // 結果卡片順序
+                const order = Array.from(document.querySelectorAll('#results-container > .data-card')).map(c => c.id);
+
                 return {
+                    // 輸入資料
                     s1n: sectionName('section1Name'),
                     s1d: document.getElementById('section1Data').value,
                     s2n: sectionName('section2Name'),
@@ -1205,9 +1217,26 @@
                     mt:  document.getElementById('millingThickness').value,
                     s3n: sectionName('section3Name'),
                     s3d: document.getElementById('section3Data').value,
+                    // 分析狀態
+                    ran: allSortedMileages.length > 0,
+                    mil: document.getElementById('mileageSelector').value,
+                    ap:  analysisPair,
+                    sap: summaryAnalysisPair,
+                    cm:  document.querySelector('input[name="calcMethod"]:checked')?.value || 'specific',
+                    co:  document.getElementById('customOffsets').value,
+                    idist: document.getElementById('interval-distance').value,
+                    idir:  document.querySelector('input[name="interval-direction"]:checked')?.value || 'l2r',
+                    sumGen: document.getElementById('summaryTableContainer').innerHTML.trim() !== '',
+                    // 版面狀態
+                    hidden: Array.from(userHiddenCards),
+                    order,
+                    collapsed,
+                    scroll: Math.round(window.scrollY),
                 };
             }
+
             function applyFormState(state) {
+                // 1. 還原輸入欄位
                 if (state.s1n !== undefined) document.getElementById('section1Name').value = state.s1n;
                 if (state.s1d !== undefined) document.getElementById('section1Data').value = state.s1d;
                 if (state.s2n !== undefined) document.getElementById('section2Name').value = state.s2n;
@@ -1217,6 +1246,66 @@
                 if (state.mt !== undefined) document.getElementById('millingThickness').value = state.mt;
                 if (state.s3n !== undefined) document.getElementById('section3Name').value = state.s3n;
                 if (state.s3d !== undefined) document.getElementById('section3Data').value = state.s3d;
+
+                // 2. 若分享者已執行分析，重新執行以產生相同結果
+                if (state.ran) {
+                    if (state.ap)  analysisPair = state.ap;
+                    if (state.sap) summaryAnalysisPair = state.sap;
+                    try { processData(); } catch(e) { console.warn('重建分析失敗', e); }
+
+                    // processData 可能重設分析組合，這裡再套用一次分享者的選擇
+                    if (state.ap)  analysisPair = state.ap;
+                    if (state.sap) summaryAnalysisPair = state.sap;
+                    if (typeof renderAnalysisSelectors === 'function') renderAnalysisSelectors();
+
+                    // 還原個別里程選取
+                    if (state.mil) {
+                        const sel = document.getElementById('mileageSelector');
+                        if ([...sel.options].some(o => o.value === state.mil)) sel.value = state.mil;
+                    }
+                    // 依還原後的分析組合與里程重繪個別斷面
+                    updateIndividualDisplay();
+                    // 還原刨鋪厚度計算設定
+                    if (state.cm) { const r = document.querySelector(`input[name="calcMethod"][value="${state.cm}"]`); if(r){ r.checked = true; r.dispatchEvent(new Event('change')); } }
+                    if (state.co !== undefined)    document.getElementById('customOffsets').value = state.co;
+                    if (state.idist !== undefined) document.getElementById('interval-distance').value = state.idist;
+                    if (state.idir) { const r = document.querySelector(`input[name="interval-direction"][value="${state.idir}"]`); if(r) r.checked = true; }
+                    if (state.sumGen) { try { generateSummaryReport(); } catch(e) { console.warn('重建總表失敗', e); } }
+                }
+
+                // 3. 還原隱藏的卡片
+                if (Array.isArray(state.hidden)) {
+                    userHiddenCards.clear();
+                    state.hidden.forEach(id => {
+                        userHiddenCards.add(id);
+                        const card = document.getElementById(id);
+                        if (card) card.classList.add('hidden');
+                    });
+                    if (typeof syncCheckboxes === 'function') syncCheckboxes();
+                }
+
+                // 4. 還原結果卡片順序
+                if (Array.isArray(state.order)) {
+                    const container = document.getElementById('results-container');
+                    state.order.forEach(id => { const c = document.getElementById(id); if (c) container.appendChild(c); });
+                }
+
+                // 5. 還原各卡片收合狀態
+                if (state.collapsed) {
+                    Object.entries(state.collapsed).forEach(([id, isCollapsed]) => {
+                        const card = document.getElementById(id);
+                        if (!card) return;
+                        const content = card.querySelector('.collapsible-content');
+                        const icon = card.querySelector('.chevron-icon');
+                        if (content) content.classList.toggle('hidden', isCollapsed);
+                        if (icon) icon.classList.toggle('rotate-180', !isCollapsed);
+                    });
+                }
+
+                // 6. 還原捲動位置（等版面與圖表渲染完成後）
+                if (typeof state.scroll === 'number') {
+                    setTimeout(() => window.scrollTo({ top: state.scroll, behavior: 'auto' }), 400);
+                }
             }
 
             // 頁面載入時：若 hash 有 s=<id> 就從 Firestore 讀取
