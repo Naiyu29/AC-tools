@@ -32,10 +32,18 @@
         .modal-backdrop.visible .modal-content { transform: scale(1); }
 
         /* 卡片管理 */
-        .card-close-btn { background:none; border:none; cursor:pointer; color:#9ca3af; font-size:13px; padding:2px 5px; border-radius:4px; line-height:1; margin-left:8px; flex-shrink:0; }
+        .card-close-btn { display:none; background:none; border:none; cursor:pointer; color:#9ca3af; font-size:13px; padding:2px 5px; border-radius:4px; line-height:1; flex-shrink:0; }
         .card-close-btn:hover { color:#ef4444; background:#fee2e2; }
+        body.edit-mode .card-close-btn { display:inline; }
+        body.edit-mode .data-card:not(.data-card .data-card) { outline:2px dashed #bfdbfe; cursor:grab; }
         .card-sortable-ghost { opacity:.35; background:#e0e7ff !important; }
         .collapsible-header { user-select:none; }
+        .chevron-icon { color:#9ca3af; }
+        /* 設定選單按鈕 */
+        .sp-btn { flex:1; font-size:12px; padding:4px 6px; border-radius:6px; border:1px solid #e2e8f0; background:#f8fafc; color:#475569; cursor:pointer; }
+        .sp-btn:hover { background:#e2e8f0; }
+        .sp-edit-btn { width:100%; text-align:left; font-size:13px; font-weight:600; padding:6px 4px 8px; border:none; background:none; cursor:pointer; color:#2563eb; border-bottom:1px solid #f1f5f9; margin-bottom:6px; }
+        .sp-edit-btn:hover { color:#1d4ed8; }
         /* 浮動按鈕 */
         .fab { position:fixed; right:16px; z-index:9998; width:42px; height:42px; border-radius:9999px; background:#fff; border:1px solid #e2e8f0; box-shadow:0 2px 8px rgba(0,0,0,.12); display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:18px; transition:background .15s; }
         .fab:hover { background:#f8fafc; }
@@ -1220,8 +1228,37 @@
                 { id: 'volume-summary-card', label: '刨除量及舖築量分析' },
             ];
 
-            // 建立設定選單 checkbox 清單
             const settingsPanel = document.getElementById('settings-panel');
+            let editMode = false;
+            let sortableInstance = null;
+
+            // --- 排版模式切換按鈕 ---
+            const editBtn = document.createElement('button');
+            editBtn.className = 'sp-edit-btn';
+            editBtn.textContent = '✏️ 啟動排版模式';
+            editBtn.addEventListener('click', e => {
+                e.stopPropagation();
+                editMode = !editMode;
+                document.body.classList.toggle('edit-mode', editMode);
+                editBtn.textContent = editMode ? '✅ 完成排版' : '✏️ 啟動排版模式';
+                if (sortableInstance) sortableInstance.option('disabled', !editMode);
+            });
+            settingsPanel.appendChild(editBtn);
+
+            // --- 全選 / 全不選 ---
+            const selRow = document.createElement('div');
+            selRow.style.cssText = 'display:flex;gap:6px;margin-bottom:8px';
+            const selAll = document.createElement('button');
+            selAll.className = 'sp-btn';
+            selAll.textContent = '全選';
+            const selNone = document.createElement('button');
+            selNone.className = 'sp-btn';
+            selNone.textContent = '全不選';
+            selRow.appendChild(selAll);
+            selRow.appendChild(selNone);
+            settingsPanel.appendChild(selRow);
+
+            // --- Checkbox 清單 ---
             cardRegistry.forEach(cfg => {
                 const lbl = document.createElement('label');
                 lbl.innerHTML = `<input type="checkbox" id="cb-${cfg.id}" checked> ${cfg.label}`;
@@ -1241,12 +1278,50 @@
                 });
             }
 
-            // 在每個卡片 header 加 ✕ 按鈕
+            selAll.addEventListener('click', e => {
+                e.stopPropagation();
+                cardRegistry.forEach(cfg => {
+                    const cb = document.getElementById('cb-' + cfg.id);
+                    const card = document.getElementById(cfg.id);
+                    if (cb && !cb.checked) {
+                        cb.checked = true;
+                        if (card) { card.classList.remove('hidden'); userHiddenCards.delete(cfg.id); }
+                    }
+                });
+            });
+            selNone.addEventListener('click', e => {
+                e.stopPropagation();
+                cardRegistry.forEach(cfg => {
+                    const cb = document.getElementById('cb-' + cfg.id);
+                    const card = document.getElementById(cfg.id);
+                    if (cb && cb.checked) {
+                        cb.checked = false;
+                        if (card) { card.classList.add('hidden'); userHiddenCards.add(cfg.id); }
+                    }
+                });
+            });
+
+            // --- 重組 header：chevron 移到標題旁，✕ 放最右 ---
             cardRegistry.forEach(cfg => {
                 const card = document.getElementById(cfg.id);
                 if (!card) return;
                 const header = card.querySelector('.collapsible-header');
                 if (!header) return;
+
+                const h3 = header.querySelector('h3');
+                const chevron = header.querySelector('.chevron-icon');
+
+                // 建立標題群組（title + chevron 並排）
+                const titleGroup = document.createElement('div');
+                titleGroup.style.cssText = 'display:flex;align-items:center;gap:4px;flex:1;min-width:0';
+                if (h3) titleGroup.appendChild(h3);
+                if (chevron) titleGroup.appendChild(chevron);
+
+                // 清空 header 剩餘內容
+                header.innerHTML = '';
+                header.appendChild(titleGroup);
+
+                // ✕ 隱藏按鈕（排版模式才顯示）
                 const btn = document.createElement('button');
                 btn.className = 'card-close-btn';
                 btn.title = '隱藏此區塊';
@@ -1276,13 +1351,14 @@
             });
             topBtn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
 
-            // 拖曳排序（結果卡片）
+            // 拖曳排序（預設停用，排版模式才啟動）
             if (typeof Sortable !== 'undefined') {
-                new Sortable(document.getElementById('results-container'), {
+                sortableInstance = new Sortable(document.getElementById('results-container'), {
                     animation: 150,
                     handle: '.collapsible-header',
                     filter: '.card-close-btn',
                     ghostClass: 'card-sortable-ghost',
+                    disabled: true,
                 });
             }
         });
@@ -1292,9 +1368,6 @@
     <!-- 浮動按鈕 -->
     <button id="back-to-top" class="fab hidden" title="回到頂部">↑</button>
     <button id="settings-fab" class="fab" title="顯示/隱藏區塊">⚙️</button>
-    <div id="settings-panel" class="hidden">
-        <p>顯示 / 隱藏區塊</p>
-        <!-- 由 JS 填入 -->
-    </div>
+    <div id="settings-panel" class="hidden"></div>
 </body>
 </html>
