@@ -110,11 +110,13 @@
             </div>
             <div class="collapsible-content mt-6 space-y-6 hidden">
                 <div class="data-card">
-                    <input type="text" id="section1Name" class="input-title mb-3" value="原地面">
+                    <input type="text" id="section1Name" class="input-title mb-1" value="原地面">
+                    <p class="text-sm text-gray-500 mb-3">刨除作業前，現有路面的量測高程。</p>
                     <textarea id="section1Data" class="w-full h-48 p-3 border border-gray-300 rounded-md" placeholder="格式: 里程 ... 高程... 支距..."></textarea>
                 </div>
                  <div class="data-card">
-                    <input type="text" id="section2Name" class="input-title mb-3" value="刨除後">
+                    <input type="text" id="section2Name" class="input-title mb-1" value="刨除後">
+                    <p class="text-sm text-gray-500 mb-3">刨除完成後的路面高程。可手動輸入，或選擇「依厚度計算」由原地面自動推算。</p>
                     <div class="flex gap-4 mb-3">
                         <div>
                             <input type="radio" name="section2Method" id="method-manual-2" value="manual" checked class="hidden">
@@ -150,7 +152,8 @@
                     </div>
                 </div>
                 <div class="data-card">
-                    <input type="text" id="section3Name" class="input-title extra mb-3" value="舖築後">
+                    <input type="text" id="section3Name" class="input-title extra mb-1" value="舖築後">
+                    <p class="text-sm text-gray-500 mb-3">AC 舖築完成後的路面高程（選填）。填入後可計算舖築量及與刨除後的高程差。</p>
                     <textarea id="section3Data" class="w-full h-48 p-3 border border-gray-300 rounded-md" placeholder="格式: 里程 高程... 支距... (選填)"></textarea>
                 </div>
                 <div class="flex flex-wrap justify-center items-center gap-4 pt-4">
