@@ -158,6 +158,7 @@
                     <button id="saveButton" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg shadow-lg">儲存結果</button>
                     <button id="exportButton" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-lg shadow-lg">匯出資料</button>
                     <button id="importButton" class="bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 px-6 rounded-lg shadow-lg">匯入資料</button>
+                    <button id="shareButton" class="bg-slate-600 hover:bg-slate-700 text-white font-bold py-3 px-6 rounded-lg shadow-lg">🔗 分享此資料</button>
                     <input type="file" id="fileInput" class="hidden" accept=".json">
                 </div>
             </div>
@@ -1164,7 +1165,50 @@
             document.getElementById('importButton').addEventListener('click', () => document.getElementById('fileInput').click());
             document.getElementById('fileInput').addEventListener('change', importData);
 
+            // --- 分享此資料（URL 狀態） ---
+            function getFormState() {
+                return {
+                    s1n: document.getElementById('section1Name').value,
+                    s1d: document.getElementById('section1Data').value,
+                    s2n: document.getElementById('section2Name').value,
+                    s2d: document.getElementById('section2Data').value,
+                    s2m: document.querySelector('input[name="section2Method"]:checked').value,
+                    mb:  document.querySelector('input[name="millingBase"]:checked')?.value || 'ground',
+                    mt:  document.getElementById('millingThickness').value,
+                    s3n: document.getElementById('section3Name').value,
+                    s3d: document.getElementById('section3Data').value,
+                };
+            }
+            function applyFormState(state) {
+                if (state.s1n !== undefined) document.getElementById('section1Name').value = state.s1n;
+                if (state.s1d !== undefined) document.getElementById('section1Data').value = state.s1d;
+                if (state.s2n !== undefined) document.getElementById('section2Name').value = state.s2n;
+                if (state.s2d !== undefined) document.getElementById('section2Data').value = state.s2d;
+                if (state.s2m) { const r = document.querySelector(`input[name="section2Method"][value="${state.s2m}"]`); if(r) { r.checked = true; r.dispatchEvent(new Event('change')); } }
+                if (state.mb)  { const r = document.querySelector(`input[name="millingBase"][value="${state.mb}"]`);      if(r) r.checked = true; }
+                if (state.mt !== undefined) document.getElementById('millingThickness').value = state.mt;
+                if (state.s3n !== undefined) document.getElementById('section3Name').value = state.s3n;
+                if (state.s3d !== undefined) document.getElementById('section3Data').value = state.s3d;
+            }
+            // 頁面載入時還原 URL 狀態
+            try {
+                const hash = location.hash.slice(1);
+                if (hash.startsWith('state=')) {
+                    const decoded = JSON.parse(decodeURIComponent(atob(hash.slice(6))));
+                    applyFormState(decoded);
+                }
+            } catch(e) { /* 忽略無效的 hash */ }
 
+            document.getElementById('shareButton').addEventListener('click', () => {
+                const encoded = btoa(encodeURIComponent(JSON.stringify(getFormState())));
+                const url = location.origin + location.pathname + '#state=' + encoded;
+                navigator.clipboard.writeText(url).then(() => {
+                    const btn = document.getElementById('shareButton');
+                    const orig = btn.textContent;
+                    btn.textContent = '✅ 已複製連結！';
+                    setTimeout(() => btn.textContent = orig, 2500);
+                }).catch(() => prompt('複製此網址：', url));
+            });
             document.getElementById('mileageSelector').addEventListener('change', updateIndividualDisplay);
             document.getElementById('summaryButton').addEventListener('click', generateSummaryReport);
             document.getElementById('sort-by').addEventListener('change', loadSavedAnalyses);
