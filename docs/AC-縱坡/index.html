@@ -89,8 +89,8 @@
                 </div>
             </div>
              <div class="input-group">
-                <label for="dataInput">高程數據 (每行一筆)</label>
-                <textarea id="dataInput" rows="4" class="text-sm"></textarea>
+                <label for="dataInput">數據（每行「樁號 高程」，或只填高程自動補樁號）</label>
+                <textarea id="dataInput" rows="4" class="text-sm" placeholder="例：&#10;0 1.936&#10;10 1.904&#10;20 1.875&#10;（也可只貼高程一欄）"></textarea>
             </div>
         </div>
         <div class="flex justify-center mb-6">
@@ -382,6 +382,30 @@
             dataTableBody.innerHTML = tableHTML;
         }
 
+        // 解析輸入：每行可為「樁號 高程」兩欄，或只填「高程」（自動補樁號 0,10,20…）
+        // 若任一行有兩個以上數字，即視為「樁號 高程」模式。回傳依樁號排序後的結果。
+        function parseElevationInput(raw) {
+            const rows = raw.split('\n')
+                .map(l => l.trim())
+                .filter(l => l !== '')
+                .map(l => l.split(/[\s,]+/).map(Number).filter(n => !isNaN(n)));
+            const hasPairs = rows.some(r => r.length >= 2);
+            let sts = [], els = [];
+            if (hasPairs) {
+                rows.forEach(r => { if (r.length >= 2) { sts.push(r[0]); els.push(r[1]); } });
+            } else {
+                rows.forEach((r, i) => { if (r.length >= 1) { sts.push(i * 10); els.push(r[0]); } });
+            }
+            // 依樁號由小到大排序（坡度、平順化都依賴正確順序）
+            const order = sts.map((_, i) => i).sort((a, b) => sts[a] - sts[b]);
+            return { stations: order.map(i => sts[i]), existingElevations: order.map(i => els[i]) };
+        }
+
+        // 由樁號＋高程組回輸入框文字（樁號 高程，每行一筆）
+        function formatInput(sts, els) {
+            return sts.map((s, i) => `${s} ${els[i]}`).join('\n');
+        }
+
         function updateApp() {
             const minThick = parseFloat(minThicknessInput.value);
             const maxThick = parseFloat(maxThicknessInput.value);
@@ -389,8 +413,9 @@
 
             const newDataRaw = dataInput.value.trim();
             if(newDataRaw){
-                 existingElevations = newDataRaw.split(/[\n, ]+/).map(Number).filter(n => !isNaN(n));
-                 stations = existingElevations.map((_, i) => i * 10);
+                 const parsed = parseElevationInput(newDataRaw);
+                 existingElevations = parsed.existingElevations;
+                 stations = parsed.stations;
             }
 
             if (isNaN(minThick) || isNaN(maxThick) || isNaN(avgThick) || minThick >= maxThick) {
@@ -424,6 +449,7 @@
                 minThickness: parseFloat(minThicknessInput.value),
                 maxThickness: parseFloat(maxThicknessInput.value),
                 avgThickness: parseFloat(avgThicknessInput.value),
+                stations: stations,
                 existingElevations: existingElevations,
                 proposedElevations: proposedElevations
             };
@@ -467,11 +493,14 @@
                 minThicknessInput.value = loadedState.minThickness;
                 maxThicknessInput.value = loadedState.maxThickness;
                 avgThicknessInput.value = loadedState.avgThickness;
-                dataInput.value = loadedState.existingElevations.join('\n');
 
                 existingElevations = loadedState.existingElevations;
                 proposedElevations = loadedState.proposedElevations;
-                stations = existingElevations.map((_, i) => i * 10);
+                // 新版含真實樁號；舊連結沒有則自動補 0,10,20…
+                stations = Array.isArray(loadedState.stations) && loadedState.stations.length === existingElevations.length
+                    ? loadedState.stations
+                    : existingElevations.map((_, i) => i * 10);
+                dataInput.value = formatInput(stations, existingElevations);
 
                 return true;
             } catch (e) {
