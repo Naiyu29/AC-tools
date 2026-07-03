@@ -319,6 +319,7 @@
             let analysisPair = { a: 1, b: 2 };
             let summaryAnalysisPair = { a: 1, b: 2 };
             let activeTab = 'input';
+            const LS_KEY = 'actool_sectionAnalysis_v1';   // 本機暫存鍵（跨工具切換保留狀態）
             let db, auth;
             let unsubscribe;
 
@@ -724,6 +725,7 @@
                     // 分析成功：啟用結果分頁並切換到「個別斷面」
                     enableResultTabs(true);
                     if (activeTab === 'input') showTab('indiv');
+                    saveLocalState();
 
                 } catch (error) {
                      document.getElementById('error-message').textContent = `錯誤: ${error.message}`;
@@ -1425,6 +1427,11 @@
                 };
             }
 
+            // 將目前狀態存入本機（切換工具/重新整理後可還原）
+            function saveLocalState() {
+                try { localStorage.setItem(LS_KEY, JSON.stringify(getFormState())); } catch(e) { /* 忽略容量或隱私模式錯誤 */ }
+            }
+
             function applyFormState(state) {
                 // 1. 還原輸入欄位
                 if (state.s1n !== undefined) document.getElementById('section1Name').value = state.s1n;
@@ -1575,10 +1582,22 @@
             }
 
             document.querySelectorAll('#tab-bar .tab-btn').forEach(btn => {
-                btn.addEventListener('click', () => { if (!btn.disabled) showTab(btn.dataset.tab); });
+                btn.addEventListener('click', () => { if (!btn.disabled) { showTab(btn.dataset.tab); saveLocalState(); } });
             });
 
             showTab('input');
+
+            // 離開頁面（含切換到其他工具）時暫存目前狀態
+            window.addEventListener('beforeunload', saveLocalState);
+            window.addEventListener('pagehide', saveLocalState);
+
+            // 載入時還原本機暫存（開啟分享連結時則以分享內容為準，不還原）
+            if (!location.hash.slice(1).startsWith('s=')) {
+                try {
+                    const saved = localStorage.getItem(LS_KEY);
+                    if (saved) applyFormState(JSON.parse(saved));
+                } catch(e) { console.warn('還原本機暫存失敗', e); }
+            }
         });
     </script>
     <script src="../nav.js" defer></script>
