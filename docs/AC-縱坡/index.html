@@ -73,6 +73,12 @@
             </div>
         </div>
 
+        <div id="bridgeBanner" class="hidden mb-6 bg-emerald-50 border border-emerald-300 rounded-lg p-4 flex flex-wrap items-center gap-3">
+            <span id="bridgeMsg" class="text-emerald-800 text-sm font-medium flex-1"></span>
+            <button id="bridgeLoadBtn" class="action-button">載入</button>
+            <button id="bridgeSkipBtn" class="secondary-button">略過</button>
+        </div>
+
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6 p-4 border border-gray-200 rounded-lg">
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div class="input-group">
@@ -654,7 +660,38 @@
             drawCustomChart();
         });
         
+        // 偵測來自「斷面分析工具」的縱向剖面資料（localStorage 橋接）
+        function checkBridge() {
+            let raw;
+            try { raw = localStorage.getItem('actool_bridge_zongpo'); } catch(e) { return; }
+            if (!raw) return;
+            let data;
+            try { data = JSON.parse(raw); } catch(e) { localStorage.removeItem('actool_bridge_zongpo'); return; }
+            if (!data || !Array.isArray(data.stations) || !Array.isArray(data.elevations) || data.stations.length < 2) {
+                localStorage.removeItem('actool_bridge_zongpo'); return;
+            }
+            const banner = document.getElementById('bridgeBanner');
+            const s0 = data.from != null ? data.from : data.stations[0];
+            const s1 = data.to != null ? data.to : data.stations[data.stations.length - 1];
+            document.getElementById('bridgeMsg').textContent =
+                `偵測到來自斷面工具的資料：「${data.layer || '高程'}」＠支距 ${data.offset != null ? data.offset : '—'} m，里程 ${s0}～${s1}，共 ${data.stations.length} 點。要載入嗎？`;
+            banner.classList.remove('hidden');
+            document.getElementById('bridgeLoadBtn').onclick = () => {
+                stations = data.stations.slice();
+                existingElevations = data.elevations.slice();
+                dataInput.value = formatInput(stations, existingElevations);
+                localStorage.removeItem('actool_bridge_zongpo');
+                banner.classList.add('hidden');
+                updateApp();
+            };
+            document.getElementById('bridgeSkipBtn').onclick = () => {
+                localStorage.removeItem('actool_bridge_zongpo');
+                banner.classList.add('hidden');
+            };
+        }
+
         window.onload = () => {
+            checkBridge();
             if (loadDataFromUrl()) {
                 manualUpdate(); // Just refresh UI with loaded data
             } else {

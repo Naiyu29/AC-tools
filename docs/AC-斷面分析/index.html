@@ -285,6 +285,18 @@
                     </div>
                     <div id="profile-chart-container" class="chart-container"><canvas id="profileChart"></canvas></div>
                     <div id="profileInfo" class="text-sm text-gray-500 text-center"></div>
+                    <div class="flex flex-wrap items-center gap-3 text-sm border-t pt-4">
+                        <span class="font-medium text-gray-700">送到縱坡工具：</span>
+                        <label class="text-gray-600">層別
+                            <select id="profileSendLayer" class="ml-1 p-1.5 border border-gray-300 rounded-md">
+                                <option value="1">原地面</option>
+                                <option value="2">刨除後</option>
+                                <option value="3">舖築後</option>
+                            </select>
+                        </label>
+                        <button id="profileSendButton" class="bg-emerald-600 hover:bg-emerald-700 text-white py-1.5 px-4 rounded-lg">📤 送出並開啟縱坡</button>
+                        <span class="text-gray-400">以目前支距、里程範圍抽出該層別高程</span>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1537,6 +1549,32 @@
                 const v = parseFloat(e.target.value);
                 exaggerations.profileChart = (e.target.value.trim() === '' || !(v > 0)) ? null : v;
                 applyExagIfSet('profileChart');
+            });
+            document.getElementById('profileSendButton').addEventListener('click', () => {
+                const offset = parseFloat(document.getElementById('profileOffset').value);
+                if (isNaN(offset)) { alert('請先輸入有效的支距。'); return; }
+                const layerSel = document.getElementById('profileSendLayer').value;
+                const map  = { '1': dataMap1, '2': dataMap2, '3': dataMap3 }[layerSel];
+                const name = sectionName('section' + layerSel + 'Name');
+                if (!map || Object.keys(map).length === 0) { alert(`「${name}」沒有資料可送出。`); return; }
+                let from = parseFloat(document.getElementById('profileFrom').value);
+                let to   = parseFloat(document.getElementById('profileTo').value);
+                if (isNaN(from)) from = -Infinity;
+                if (isNaN(to))   to   =  Infinity;
+                const lo = Math.min(from, to), hi = Math.max(from, to);
+                const mileages = allSortedMileages.filter(m => m >= lo && m <= hi).slice().sort((a, b) => a - b);
+                const stations = [], elevations = [];
+                mileages.forEach(m => {
+                    const sec = map[m];
+                    if (!sec || sec.length === 0) return;
+                    const y = interpolate(sec, offset);
+                    if (y !== null) { stations.push(m); elevations.push(Number(y.toFixed(3))); }
+                });
+                if (stations.length < 2) { alert(`「${name}」在支距 ${offset} m 的有效點不足（需至少 2 點）。`); return; }
+                const payload = { stations, elevations, offset, layer: name, from: lo, to: hi };
+                try { localStorage.setItem('actool_bridge_zongpo', JSON.stringify(payload)); }
+                catch(e) { alert('暫存失敗，無法送出。'); return; }
+                location.href = '../AC-縱坡/';
             });
             document.getElementById('sort-by').addEventListener('change', loadSavedAnalyses);
             setupSection2MethodToggle();
