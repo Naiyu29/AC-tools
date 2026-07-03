@@ -153,6 +153,7 @@
         import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 
         let db, auth, slopeUnsub;
+        const SLOPE_LS_KEY = 'actool_slope_v1';   // 本機暫存鍵（跨工具切換保留狀態）
 
         const initialData = [1.936, 1.904, 1.875, 1.827, 1.747, 1.67, 1.686, 1.706, 1.696, 1.65, 1.595, 1.555, 1.516, 1.431, 1.341, 1.256, 1.145, 1.005, 0.906, 0.802, 0.67, 0.566, 0.461, 0.39, 0.305, 0.24, 0.234, 0.2, 0.171, 0.158, 0.158, 0.175];
         let stations = [];
@@ -590,6 +591,13 @@
             else updateApp();
         }
 
+        // 本機暫存：切換工具/重新整理後保留狀態
+        function saveSlopeLocal() {
+            try {
+                if (stations.length >= 2) localStorage.setItem(SLOPE_LS_KEY, JSON.stringify(getSlopeState()));
+            } catch(e) { /* 忽略容量或隱私模式錯誤 */ }
+        }
+
         async function saveSlope() {
             if (!auth || !auth.currentUser) { alert('請先用上方「使用 Google 登入」登入，才能儲存到雲端。'); return; }
             if (stations.length < 2) { alert('尚無有效資料可儲存。'); return; }
@@ -855,6 +863,8 @@
             checkBridge();
             if (loadDataFromUrl()) {
                 manualUpdate(); // Just refresh UI with loaded data
+            } else if (restoreSlopeLocal()) {
+                // 已從本機暫存還原
             } else {
                 // If no data in URL, use initialData
                 dataInput.value = initialData.join('\n');
@@ -864,6 +874,21 @@
             }
         };
 
+        // 還原本機暫存；成功回傳 true
+        function restoreSlopeLocal() {
+            let raw;
+            try { raw = localStorage.getItem(SLOPE_LS_KEY); } catch(e) { return false; }
+            if (!raw) return false;
+            try {
+                const s = JSON.parse(raw);
+                if (!s || !Array.isArray(s.stations) || s.stations.length < 2) return false;
+                applySlopeState(s);
+                return true;
+            } catch(e) { return false; }
+        }
+
+        window.addEventListener('beforeunload', saveSlopeLocal);
+        window.addEventListener('pagehide', saveSlopeLocal);
         window.onresize = updateApp;
     </script>
     <script src="../nav.js" defer></script>
