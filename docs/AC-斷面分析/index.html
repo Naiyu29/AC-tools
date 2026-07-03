@@ -8,6 +8,8 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-annotation/1.4.0/chartjs-plugin-annotation.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Inter', 'Noto Sans TC', sans-serif; }
@@ -776,19 +778,25 @@
                     return;
                 }
                 info.textContent = `支距 ${offset} m ｜里程 ${lo} ~ ${hi}（共 ${mileages.length} 個斷面）`;
-                charts['profileChart'] = new Chart(document.getElementById('profileChart'), {
+                const profileCanvas = document.getElementById('profileChart');
+                charts['profileChart'] = new Chart(profileCanvas, {
                     type: 'line',
                     data: { datasets },
                     options: {
                         responsive: true, maintainAspectRatio: false,
                         interaction: { mode: 'nearest', intersect: false },
-                        plugins: { title: { display: true, text: `縱向剖面（支距 ${offset} m）`, font: { size: 18 } } },
+                        plugins: {
+                            title: { display: true, text: `縱向剖面（支距 ${offset} m）`, font: { size: 18 } },
+                            subtitle: { display: true, text: '拖曳平移 ｜ 滾輪縮放 ｜ 雙擊還原', color: '#94a3b8', font: { size: 12 } },
+                            zoom: zoomOpts(),
+                        },
                         scales: {
                             x: { type: 'linear', title: { display: true, text: '里程' } },
                             y: { title: { display: true, text: '高程 (m)' } }
                         }
                     }
                 });
+                profileCanvas.ondblclick = () => { const c = charts['profileChart']; if (c && c.resetZoom) c.resetZoom(); };
             }
 
             function updateIndividualDisplay() {
@@ -810,6 +818,14 @@
                 document.getElementById('areaDisplay').innerHTML = areaParts.join('&nbsp;&nbsp; ') || '—';
             }
             
+            // 圖表拖曳平移 + 滾輪/捏合縮放設定
+            function zoomOpts() {
+                return {
+                    pan:  { enabled: true, mode: 'xy' },
+                    zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'xy' },
+                };
+            }
+
             function createOrUpdateChart(chartId, canvasEl, mileage, p1, p2, p3) {
                 if (charts[chartId]) charts[chartId].destroy();
                 const datasets = [];
@@ -822,7 +838,21 @@
                 if (p3 && p3.length > 0) {
                     datasets.push({ label: sectionName('section3Name'), data: p3, borderColor: 'rgb(34, 197, 94)', tension: 0.1, fill: false, pointRadius: 5, borderDash: [5, 5] });
                 }
-                charts[chartId] = new Chart(canvasEl, { type: 'line', data: { datasets }, options: { responsive: true, maintainAspectRatio: false, plugins: { title: { display: true, text: `里程 ${mileage} 斷面圖`, font: { size: 18 } } }, scales: { x: { type: 'linear', title: { display: true, text: '支距 (m)' } }, y: { title: { display: true, text: '高程 (m)' } } } } });
+                const enableZoom = chartId === 'mainChart';
+                charts[chartId] = new Chart(canvasEl, {
+                    type: 'line',
+                    data: { datasets },
+                    options: {
+                        responsive: true, maintainAspectRatio: false,
+                        plugins: {
+                            title: { display: true, text: `里程 ${mileage} 斷面圖`, font: { size: 18 } },
+                            subtitle: { display: enableZoom, text: '拖曳平移 ｜ 滾輪縮放 ｜ 雙擊還原', color: '#94a3b8', font: { size: 12 } },
+                            zoom: enableZoom ? zoomOpts() : undefined,
+                        },
+                        scales: { x: { type: 'linear', title: { display: true, text: '支距 (m)' } }, y: { title: { display: true, text: '高程 (m)' } } }
+                    }
+                });
+                if (enableZoom) canvasEl.ondblclick = () => { const c = charts[chartId]; if (c && c.resetZoom) c.resetZoom(); };
             }
 
             function displayAllMileageCharts() {
