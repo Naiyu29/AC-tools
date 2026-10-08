@@ -417,7 +417,12 @@
         </div>
     </div>
 
-    <script>
+    <script type="module">
+        import { parseSurveyPoints, computeBounds, idw, elevationColor, parseCADList, densifyCenterline,
+                 centerlineLength, centerlineBounds, offsetFromCenterline, pointAtDistance, formatStation,
+                 buildBatchSections, sampleProfile } from "../shared/dtm-math.js";
+        import { LS_KEYS, lsGetJSON, lsSetJSON } from "../shared/storage.js";
+
         const DEFAULT_DATA = `1	2705664.491	186194.696	12.672
 2	2705663.468	186194.769	12.721
 3	2705658.51	186193.704	12.887
@@ -973,22 +978,14 @@
             }
 
             saveToAutoSave() {
-                try {
-                    localStorage.setItem('dtm_autosave', JSON.stringify(this.getCurrentState()));
-                    const status = document.getElementById('autoSaveStatus');
-                    if(status) status.innerText = `狀態：已自動存檔 (${new Date().toLocaleTimeString()})`;
-                } catch(e) {
-                    const status = document.getElementById('autoSaveStatus');
-                    if(status) status.innerText = "狀態：存檔失敗 (空間不足)";
-                }
+                if(this.autoSaveTimer) { clearTimeout(this.autoSaveTimer); this.autoSaveTimer = null; }
+                const ok = lsSetJSON(LS_KEYS.dtmAutosave, this.getCurrentState());
+                const status = document.getElementById('autoSaveStatus');
+                if(status) status.innerText = ok ? `狀態：已自動存檔 (${new Date().toLocaleTimeString()})` : "狀態：存檔失敗 (空間不足)";
             }
 
-            getSavedProjects() {
-                try {
-                    const projects = localStorage.getItem('dtm_projects');
-                    return projects ? JSON.parse(projects) : {};
-                } catch(e) { return {}; }
-            }
+            getSavedProjects() { return lsGetJSON(LS_KEYS.dtmProjects, {}) || {}; }
+            saveProjects(projects) { return lsSetJSON(LS_KEYS.dtmProjects, projects); }
 
             // --- 自訂對話框系統 ---
             showMsg(title, msg) {
@@ -1038,14 +1035,13 @@
                 this.showPrompt("另存新專案", "請輸入專案名稱：", defaultName, (name) => {
                     const projects = this.getSavedProjects();
                     projects[name] = { state: this.getCurrentState(), date: new Date().toLocaleString() };
-                    try {
-                        localStorage.setItem('dtm_projects', JSON.stringify(projects));
+                    if (this.saveProjects(projects)) {
                         this.showMsg("成功", `專案 "${name}" 已儲存！`);
                         // 如果專案管理面板正開著，就刷新它
                         if (document.getElementById('projectModal').style.display === 'block') {
                             this.openProjectManager(); 
                         }
-                    } catch(e) { 
+                    } else {
                         this.showMsg("錯誤", "儲存失敗，可能是瀏覽器儲存空間不足。"); 
                     }
                 });
@@ -1103,7 +1099,7 @@
                         }
                         projects[newName] = projects[oldName];
                         delete projects[oldName];
-                        localStorage.setItem('dtm_projects', JSON.stringify(projects));
+                        this.saveProjects(projects);
                         this.openProjectManager(); 
                     }
                 });
@@ -1113,22 +1109,22 @@
                 this.showConfirm("刪除專案", `確定要刪除專案 "${name}" 嗎？此動作無法復原。`, () => {
                     const projects = this.getSavedProjects();
                     delete projects[name];
-                    localStorage.setItem('dtm_projects', JSON.stringify(projects));
+                    this.saveProjects(projects);
                     this.openProjectManager(); 
                 });
             }
 
             init() {
-                try {
-                    const autosave = localStorage.getItem('dtm_autosave');
-                    if(autosave) {
-                        this.restoreState(JSON.parse(autosave));
+                const autosave = lsGetJSON(LS_KEYS.dtmAutosave, null);
+                if (autosave) {
+                    try {
+                        this.restoreState(autosave);
                         const status = document.getElementById('autoSaveStatus');
                         if(status) status.innerText = `狀態：已還原上次進度`;
                         this.render();
-                        return; 
-                    }
-                } catch(e) { console.error("Load autosave failed", e); }
+                        return;
+                    } catch(e) { console.error("Load autosave failed", e); }
+                }
                 document.getElementById('inputData').value = DEFAULT_DATA;
                 document.getElementById('cadInput').value = DEFAULT_CAD_DATA;
                 this.parseData();
@@ -1148,21 +1144,8 @@
 
             parseData() {
                 const rawText = document.getElementById('inputData').value;
-                const lines = rawText.trim().split('\n');
                 const coordFormat = document.querySelector('input[name="coordFormat"]:checked').value;
-                this.points = [];
-                lines.forEach(line => {
-                    const parts = line.trim().split(/\s+/);
-                    if (parts.length >= 4) {
-                        const id = parts[0];
-                        const val1 = parseFloat(parts[1]); const val2 = parseFloat(parts[2]); const z = parseFloat(parts[3]);
-                        if (!isNaN(val1) && !isNaN(val2) && !isNaN(z)) {
-                            let x, y;
-                            if (coordFormat === 'nez') { y = val1; x = val2; } else { x = val1; y = val2; }
-                            this.points.push({ id, x, y, z });
-                        }
-                    }
-                });
+                this.points = parseSurveyPoints(rawText, coordFormat);
 
                 document.getElementById('pointCount').innerText = this.points.length;
                 this.calculateBounds();
@@ -1176,11 +1159,9 @@
             }
 
             calculateBounds() {
-                if (this.points.length === 0) return;
-                const xs = this.points.map(p => p.x); const ys = this.points.map(p => p.y); const zs = this.points.map(p => p.z);
-                this.bounds.minX = Math.min(...xs); this.bounds.maxX = Math.max(...xs);
-                this.bounds.minY = Math.min(...ys); this.bounds.maxY = Math.max(...ys);
-                this.bounds.minZ = Math.min(...zs); this.bounds.maxZ = Math.max(...zs);
+                const b = computeBounds(this.points);
+                if (!b) return;
+                this.bounds = b;
                 this.renderMinZ = this.bounds.minZ; this.renderMaxZ = this.bounds.maxZ;
                 document.getElementById('legendMin').innerText = this.bounds.minZ.toFixed(2);
                 document.getElementById('legendMax').innerText = this.bounds.maxZ.toFixed(2);
@@ -1206,142 +1187,41 @@
             worldToScreen(wx, wy) { return { x: (wx - this.bounds.minX) * this.scale + this.offsetX, y: this.canvas.height - ((wy - this.bounds.minY) * this.scale + this.offsetY) }; }
             screenToWorld(sx, sy) { return { x: (sx - this.offsetX) / this.scale + this.bounds.minX, y: ((this.canvas.height - sy) - this.offsetY) / this.scale + this.bounds.minY }; }
 
-            calculateIDW(targetX, targetY) {
-                const power = parseFloat(document.getElementById('idwPower').value) || 2;
-                const maskRadius = parseFloat(document.getElementById('maskRadius').value) || 0;
-                let num = 0, den = 0, minDist = Infinity;
-                for (const p of this.points) {
-                    const dx = targetX - p.x; const dy = targetY - p.y; const d = Math.sqrt(dx*dx + dy*dy);
-                    if (d < minDist) minDist = d;
-                    if (d < 0.00000001) return { z: p.z, valid: true };
-                    if (maskRadius > 0 && d > maskRadius * 2) continue;
-                    const w = 1 / Math.pow(d, power); num += w * p.z; den += w;
-                }
-                if (maskRadius > 0 && minDist > maskRadius) return { z: 0, valid: false };
-                if (den === 0) return { z: 0, valid: false };
-                return { z: num / den, valid: true };
+            idwParams() {
+                return {
+                    power: parseFloat(document.getElementById('idwPower').value) || 2,
+                    maskRadius: parseFloat(document.getElementById('maskRadius').value) || 0,
+                };
             }
 
-            getColor(z) {
-                const min = this.renderMinZ; const max = this.renderMaxZ;
-                let norm = (z - min) / (max - min);
-                if (norm < 0) norm = 0; if (norm > 1) norm = 1;
-                return `hsl(${(1 - norm) * 240}, 100%, 50%)`;
+            calculateIDW(targetX, targetY, params = this.idwParams()) {
+                return idw(this.points, targetX, targetY, params.power, params.maskRadius);
             }
+
+            getColor(z) { return elevationColor(z, this.renderMinZ, this.renderMaxZ); }
 
             // === 中心線與斷面計算 ===
             
-            updateCenterlineBounds() {
-                if(this.importedCenterline.length === 0) {
-                    this.clBounds = null; return;
-                }
-                let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-                this.importedCenterline.forEach(p => {
-                    if(p.x < minX) minX = p.x; if(p.x > maxX) maxX = p.x;
-                    if(p.y < minY) minY = p.y; if(p.y > maxY) maxY = p.y;
-                });
-                this.clBounds = { minX, maxX, minY, maxY };
-            }
+            updateCenterlineBounds() { this.clBounds = centerlineBounds(this.importedCenterline); }
 
             // 計算點到中心線的垂直距離(正負號代表左右)
-            getOffsetFromCenterline(x, y) {
-                if(!this.importedCenterline || this.importedCenterline.length < 2) return null;
-                let minDist = Infinity;
-                let offset = 0;
-                const len = this.importedCenterline.length - 1;
-                for(let i=0; i<len; i++) {
-                    const A = this.importedCenterline[i];
-                    const B = this.importedCenterline[i+1];
-                    
-                    // Fast Bounding Box Check 
-                    if (minDist !== Infinity) {
-                        const bMinX = Math.min(A.x, B.x) - minDist;
-                        const bMaxX = Math.max(A.x, B.x) + minDist;
-                        if(x < bMinX || x > bMaxX) continue;
-                        const bMinY = Math.min(A.y, B.y) - minDist;
-                        const bMaxY = Math.max(A.y, B.y) + minDist;
-                        if(y < bMinY || y > bMaxY) continue;
-                    }
-
-                    const dx = B.x - A.x;
-                    const dy = B.y - A.y;
-                    const len2 = dx*dx + dy*dy;
-                    if(len2 === 0) continue;
-                    
-                    let t = ((x - A.x)*dx + (y - A.y)*dy) / len2;
-                    t = Math.max(0, Math.min(1, t));
-                    const projX = A.x + t * dx;
-                    const projY = A.y + t * dy;
-                    
-                    const dist2 = (x - projX)**2 + (y - projY)**2;
-                    if(dist2 < minDist) {
-                        minDist = dist2;
-                        const cross = dx * (y - A.y) - dy * (x - A.x);
-                        // Standard cartesian: Cross > 0 means left side.
-                        offset = (cross > 0) ? -Math.sqrt(dist2) : Math.sqrt(dist2);
-                    }
-                }
-                return offset;
-            }
+            getOffsetFromCenterline(x, y) { return offsetFromCenterline(this.importedCenterline, x, y); }
 
             importCADList(silent = false) {
                 const text = document.getElementById('cadInput').value;
                 if(!text.trim()) { if(!silent) this.showMsg("提示", "請輸入資料"); return; }
 
-                this.importedCenterline = [];
-                const lines = text.split('\n');
-                const regexPoint = /在點\s+X=([\d\.]+)\s+Y=([\d\.]+)/;
-                const regexBulge = /凸度\s+([\-\d\.]+)/;
-                const regexCenter = /中心點\s+X=([\d\.]+)\s+Y=([\d\.]+)/;
-                const regexRadius = /半徑\s+([\d\.]+)/;
+                const vertices = parseCADList(text);
+                if(vertices.length < 2) { this.importedCenterline = []; if(!silent) this.showMsg("錯誤", "無法解析足夠的點位。"); return; }
 
-                let parsedVertices = []; let currentVertex = {};
-                for(let line of lines) {
-                    let match;
-                    if (match = line.match(regexPoint)) {
-                        if(currentVertex.x !== undefined) parsedVertices.push(currentVertex);
-                        currentVertex = { x: parseFloat(match[1]), y: parseFloat(match[2]), bulge: 0 };
-                    } else if (match = line.match(regexBulge)) { currentVertex.bulge = parseFloat(match[1]);
-                    } else if (match = line.match(regexCenter)) { currentVertex.cx = parseFloat(match[1]); currentVertex.cy = parseFloat(match[2]);
-                    } else if (match = line.match(regexRadius)) { currentVertex.radius = parseFloat(match[1]); }
-                }
-                if(currentVertex.x !== undefined) parsedVertices.push(currentVertex);
-                if(parsedVertices.length < 2) { if(!silent) this.showMsg("錯誤", "無法解析足夠的點位。"); return; }
-
-                let finalPoints = [];
-                for(let i=0; i<parsedVertices.length - 1; i++) {
-                    const p1 = parsedVertices[i]; const p2 = parsedVertices[i+1];
-                    finalPoints.push({x: p1.x, y: p1.y});
-                    if(Math.abs(p1.bulge) > 0.000001) {
-                        if(p1.cx === undefined || p1.radius === undefined) continue; 
-                        const cx = p1.cx; const cy = p1.cy; const r = p1.radius;
-                        let ang1 = Math.atan2(p1.y - cy, p1.x - cx); let ang2 = Math.atan2(p2.y - cy, p2.x - cx);
-                        if (p1.bulge < 0) { if (ang2 > ang1) ang2 -= Math.PI * 2; } else { if (ang2 < ang1) ang2 += Math.PI * 2; }
-                        const steps = Math.ceil(Math.abs(ang2 - ang1) * r / 2.0); 
-                        for(let j=1; j<steps; j++) {
-                            const ang = ang1 + (ang2 - ang1) * (j/steps);
-                            finalPoints.push({x: cx + r * Math.cos(ang), y: cy + r * Math.sin(ang)});
-                        }
-                    }
-                }
-                finalPoints.push({x: parsedVertices[parsedVertices.length-1].x, y: parsedVertices[parsedVertices.length-1].y});
-
-                this.importedCenterline = finalPoints;
+                this.importedCenterline = densifyCenterline(vertices);
                 document.getElementById('cadModal').style.display = 'none';
-                
-                let totalDist = 0; this.importedCenterline[0].dist = 0;
-                for(let i=1; i<this.importedCenterline.length; i++) {
-                    const p1 = this.importedCenterline[i-1]; const p2 = this.importedCenterline[i];
-                    totalDist += Math.sqrt((p2.x-p1.x)**2 + (p2.y-p1.y)**2);
-                    this.importedCenterline[i].dist = totalDist;
-                }
-                
                 this.updateCenterlineBounds();
 
                 if(!silent) {
                     this.render();
                     this.triggerAutoSave();
-                    this.showMsg("匯入成功", `共生成 ${finalPoints.length} 點，長 ${totalDist.toFixed(2)}m。`);
+                    this.showMsg("匯入成功", `共生成 ${this.importedCenterline.length} 點，長 ${centerlineLength(this.importedCenterline).toFixed(2)}m。`);
                 }
             }
 
@@ -1359,58 +1239,16 @@
                 
                 if(!interval || interval <= 0) { this.showMsg("錯誤", "間距設定錯誤"); return; }
 
-                this.batchSections = []; 
-                const totalLength = this.importedCenterline[this.importedCenterline.length-1].dist;
-                
-                // 計算需要生成的樁號陣列 (對齊 interval)
-                let stationsToGen = [startStation];
-                let nextStation = Math.ceil(startStation / interval) * interval;
-                if (nextStation === startStation) nextStation += interval;
-                
-                while(nextStation <= startStation + totalLength) {
-                    stationsToGen.push(nextStation);
-                    nextStation += interval;
-                }
-                if(stationsToGen[stationsToGen.length-1] < startStation + totalLength - 0.01) {
-                    stationsToGen.push(startStation + totalLength);
-                }
-
-                for(let st of stationsToGen) {
-                    const distAlongLine = st - startStation;
-                    const info = this.getPointInfoAtDistance(distAlongLine);
-                    if(!info) continue;
-                    
-                    const nx = -Math.sin(info.angle); 
-                    const ny = Math.cos(info.angle);
-                    
-                    this.batchSections.push({
-                        station: st,
-                        p1: { x: info.x + nx * widthL, y: info.y + ny * widthL }, // Left
-                        p2: { x: info.x - nx * widthR, y: info.y - ny * widthR }, // Right
-                        name: this.formatStation(st),
-                        startOffset: -widthL,
-                        endOffset: widthR
-                    });
-                }
+                this.batchSections = buildBatchSections(this.importedCenterline, startStation, interval, widthL, widthR);
                 
                 document.getElementById('batchModal').style.display = 'none';
                 this.updateStationListUI();
                 this.showMsg("生成完畢", `已生成 ${this.batchSections.length} 個斷面。`);
             }
 
-            getPointInfoAtDistance(targetDist) {
-                for(let i=0; i<this.importedCenterline.length-1; i++) {
-                    const p1 = this.importedCenterline[i]; const p2 = this.importedCenterline[i+1];
-                    if(targetDist >= p1.dist && targetDist <= p2.dist) {
-                        const segLen = p2.dist - p1.dist;
-                        if(segLen === 0) return { x: p1.x, y: p1.y, angle: 0 }; 
-                        const t = (targetDist - p1.dist) / segLen;
-                        return { x: p1.x + (p2.x - p1.x) * t, y: p1.y + (p2.y - p1.y) * t, angle: Math.atan2(p2.y - p1.y, p2.x - p1.x) };
-                    }
-                } return null;
-            }
+            getPointInfoAtDistance(targetDist) { return pointAtDistance(this.importedCenterline, targetDist); }
 
-            formatStation(st) { return `${Math.floor(st / 1000)}K+${(st % 1000).toFixed(2).padStart(6, '0')}`; }
+            formatStation(st) { return formatStation(st); }
 
             updateStationListUI() {
                 const panel = document.getElementById('stationListPanel');
@@ -1449,19 +1287,8 @@
             }
             
             generateProfileData(p1, p2, startOffset, endOffset) {
-                const totalDist = Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2));
-                if (totalDist === 0) return [];
-                let steps = Math.max(10, Math.min(200, Math.ceil(totalDist / 0.5)));
-                const profileData = [];
-                for (let i = 0; i <= steps; i++) {
-                    const t = i / steps;
-                    const cx = p1.x + (p2.x - p1.x) * t;
-                    const cy = p1.y + (p2.y - p1.y) * t;
-                    const res = this.calculateIDW(cx, cy);
-                    const offset = startOffset + (endOffset - startOffset) * t;
-                    profileData.push({ offset: offset, z: res.valid ? res.z : null });
-                }
-                return profileData;
+                const { power, maskRadius } = this.idwParams();
+                return sampleProfile(this.points, p1, p2, startOffset, endOffset, power, maskRadius);
             }
 
             renderProfileChart(data, startOffset, endOffset) {
@@ -1651,6 +1478,7 @@
                 else { if (!this.renderTimer) document.getElementById('loading').style.display = 'block'; }
                 
                 const draw = () => {
+                    const idwP = this.idwParams();
                     const widthL = parseFloat(document.getElementById('mainLeftWidth').value) || 4.5;
                     const widthR = parseFloat(document.getElementById('mainRightWidth').value) || 4.5;
                     const maxW = Math.max(widthL, widthR);
@@ -1695,7 +1523,7 @@
                                 if(offset === null || offset < -widthL || offset > widthR) continue;
                             }
 
-                            const result = this.calculateIDW(worldPos.x, worldPos.y);
+                            const result = this.calculateIDW(worldPos.x, worldPos.y, idwP);
                             if (result.valid) { this.ctx.fillStyle = this.getColor(result.z); this.ctx.fillRect(sx, sy, step+1, step+1); }
                         }
                     }
@@ -1755,22 +1583,16 @@
                 this.ctx.stroke();
             }
 
-            queryPoint() {
-                const qx = parseFloat(document.getElementById('queryX').value), qy = parseFloat(document.getElementById('queryY').value);
-                const resultBox = document.getElementById('queryResult');
-                if (isNaN(qx) || isNaN(qy)) { resultBox.innerText = "座標輸入錯誤"; resultBox.style.color = "red"; return; }
-                const result = this.calculateIDW(qx, qy);
-                if (result.valid) { resultBox.innerHTML = `X: ${qx}<br>Y: ${qy}<br>Z: ${result.z.toFixed(4)}`; resultBox.style.color = "#4cd137"; } 
-                else { resultBox.innerHTML = `X: ${qx}<br>Y: ${qy}<br>超出裁切範圍`; resultBox.style.color = "#e74c3c"; }
-                const sPos = this.worldToScreen(qx, qy); this.render(false); 
-                setTimeout(() => { this.ctx.beginPath(); this.ctx.arc(sPos.x, sPos.y, 8, 0, Math.PI * 2); this.ctx.strokeStyle = '#ff00ff'; this.ctx.lineWidth = 3; this.ctx.stroke(); }, 100); 
-            }
-
             loadData() { this.parseData(); this.render(); }
         }
 
         const app = new TerrainMap();
+        window.app = app;   // 頁面上的 onclick="app.…" 需要全域存取
         window.onload = () => { app.init(); };
+        // 離開頁面（含切換到其他工具）時，若自動存檔尚在防抖等待中，立即寫入，與其他工具行為一致
+        const flushAutoSave = () => { if (app.autoSaveTimer) app.saveToAutoSave(); };
+        window.addEventListener('beforeunload', flushAutoSave);
+        window.addEventListener('pagehide', flushAutoSave);
     </script>
     <script src="../nav.js" defer></script>
 

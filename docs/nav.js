@@ -4,6 +4,8 @@
  *   <script src="../nav.js" defer></script>
  */
 (function () {
+  /* 工具清單：順序與首頁卡片一致（斷面分析 → 縱坡 → 地形測量）。
+     新增工具時只需在此加一行，並在 docs/index.html 加一張卡片。 */
   var tools = [
     { folder: 'AC-斷面分析', label: '斷面分析' },
     { folder: 'AC-縱坡',     label: '縱坡' },
@@ -67,16 +69,18 @@
   style.textContent = css;
   document.head.appendChild(style);
 
-  var root = location.hostname === 'localhost' ? '/' : '/AC-tools/';
+  /* 每個工具都放在 docs/<工具>/ 下一層，首頁一律是上一層；
+     不再依 hostname 猜測路徑（舊寫法在 127.0.0.1、自架主機或 Playwright 測試時會指到錯的位置）。 */
+  var root = '../';
 
   /* Build inline links (desktop) */
   var linksHtml = '<a class="acnav-link acnav-home" href="' + root + '">首頁</a>'
                 + '<span class="acnav-sep"></span>';
   tools.forEach(function (t) {
     if (t.folder === currentFolder) {
-      linksHtml += '<span class="acnav-link acnav-active">' + t.label + '</span>';
+      linksHtml += '<span class="acnav-link acnav-active" data-tool="' + t.folder + '">' + t.label + '</span>';
     } else {
-      linksHtml += '<a class="acnav-link" href="../' + encodeURIComponent(t.folder) + '/">' + t.label + '</a>';
+      linksHtml += '<a class="acnav-link" data-tool="' + t.folder + '" href="../' + encodeURIComponent(t.folder) + '/">' + t.label + '</a>';
     }
   });
 

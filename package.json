@@ -1,0 +1,12 @@
+{
+  "name": "ac-tools",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AC 工具集：斷面分析、縱坡、地形測量（GitHub Pages 靜態站，docs/ 為站台根目錄）",
+  "type": "module",
+  "scripts": {
+    "test": "node --test \"tests/unit/**/*.test.mjs\"",
+    "test:e2e": "node tests/e2e/run.mjs",
+    "serve": "npx http-server docs -p 8787 -c-1 --silent"
+  }
+}

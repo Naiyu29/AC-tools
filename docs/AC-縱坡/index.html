@@ -148,12 +148,13 @@
     </div>
 
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getFirestore, collection, addDoc, query, onSnapshot, orderBy, doc, getDoc, setDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { initFirebase, renderAuthBar, createShare, loadShare, shareUrl,
+                 collection, addDoc, query, onSnapshot, orderBy, doc, getDoc, deleteDoc, onAuthStateChanged } from "../shared/firebase.js";
+        import { parseElevationInput, formatInput, calculateSmoothCurve, threePointAverage, averageThicknessCm, toCSV } from "../shared/slope-math.js";
+        import { LS_KEYS, lsGetJSON, lsSetJSON, readBridge, clearBridge, parseShareHash } from "../shared/storage.js";
 
         let db, auth, slopeUnsub;
-        const SLOPE_LS_KEY = 'actool_slope_v1';   // 本機暫存鍵（跨工具切換保留狀態）
+        const SLOPE_LS_KEY = LS_KEYS.slope;   // 本機暫存鍵（跨工具切換保留狀態）
 
         const initialData = [1.936, 1.904, 1.875, 1.827, 1.747, 1.67, 1.686, 1.706, 1.696, 1.65, 1.595, 1.555, 1.516, 1.431, 1.341, 1.256, 1.145, 1.005, 0.906, 0.802, 0.67, 0.566, 0.461, 0.39, 0.305, 0.24, 0.234, 0.2, 0.171, 0.158, 0.158, 0.175];
         let stations = [];
@@ -184,39 +185,7 @@
         let lastMousePos = { x: 0, y: 0 };
         let lastHoverIndex = -1;
 
-        function calculateSmoothCurve(existing, minThick, maxThick, targetAvg) {
-            const n = existing.length;
-            if (n === 0) return [];
-            const minThickM = minThick / 100;
-            const maxThickM = maxThick / 100;
-            const targetAvgM = targetAvg / 100;
-
-            let smoothed = existing.map(e => e + targetAvgM);
-            
-            for (let iter = 0; iter < 200; iter++) { 
-                let tempSmoothed = [...smoothed];
-                if (n > 2) {
-                    for (let i = 1; i < n - 1; i++) {
-                        tempSmoothed[i] = (smoothed[i - 1] * 0.3 + smoothed[i] * 0.4 + smoothed[i + 1] * 0.3);
-                    }
-                }
-                smoothed = tempSmoothed;
-                for (let i = 0; i < n; i++) {
-                    const lower = existing[i] + minThickM;
-                    const upper = existing[i] + maxThickM;
-                    smoothed[i] = Math.max(lower, Math.min(upper, smoothed[i]));
-                }
-            }
-             let currentAvgThickness = smoothed.reduce((sum, val, i) => sum + (val - existing[i]), 0) / n;
-             let offset = targetAvgM - currentAvgThickness;
-             smoothed = smoothed.map(val => val + offset);
-             for (let i = 0; i < n; i++) {
-                 const lower = existing[i] + minThickM;
-                 const upper = existing[i] + maxThickM;
-                 smoothed[i] = Math.max(lower, Math.min(upper, smoothed[i]));
-             }
-            return smoothed;
-        }
+        // 平順化演算法在 ../shared/slope-math.js
 
         function getChartMetrics() {
             const parent = canvas.parentElement;
@@ -407,30 +376,6 @@
             dataTableBody.innerHTML = tableHTML;
         }
 
-        // 解析輸入：每行可為「樁號 高程」兩欄，或只填「高程」（自動補樁號 0,10,20…）
-        // 若任一行有兩個以上數字，即視為「樁號 高程」模式。回傳依樁號排序後的結果。
-        function parseElevationInput(raw) {
-            const rows = raw.split('\n')
-                .map(l => l.trim())
-                .filter(l => l !== '')
-                .map(l => l.split(/[\s,]+/).map(Number).filter(n => !isNaN(n)));
-            const hasPairs = rows.some(r => r.length >= 2);
-            let sts = [], els = [];
-            if (hasPairs) {
-                rows.forEach(r => { if (r.length >= 2) { sts.push(r[0]); els.push(r[1]); } });
-            } else {
-                rows.forEach((r, i) => { if (r.length >= 1) { sts.push(i * 10); els.push(r[0]); } });
-            }
-            // 依樁號由小到大排序（坡度、平順化都依賴正確順序）
-            const order = sts.map((_, i) => i).sort((a, b) => sts[a] - sts[b]);
-            return { stations: order.map(i => sts[i]), existingElevations: order.map(i => els[i]) };
-        }
-
-        // 由樁號＋高程組回輸入框文字（樁號 高程，每行一筆）
-        function formatInput(sts, els) {
-            return sts.map((s, i) => `${s} ${els[i]}`).join('\n');
-        }
-
         function updateApp() {
             const minThick = parseFloat(minThicknessInput.value);
             const maxThick = parseFloat(maxThicknessInput.value);
@@ -453,7 +398,7 @@
             renderDataTable();
 
             if(proposedElevations.length > 0){
-                const finalAvgThickness = proposedElevations.reduce((sum, val, i) => sum + (val - existingElevations[i]), 0) / proposedElevations.length * 100;
+                const finalAvgThickness = averageThicknessCm(existingElevations, proposedElevations);
                 infoText.innerHTML = `<p class="text-green-600 font-semibold">計算完成。全域平順化後，平均厚度約為: <strong>${finalAvgThickness.toFixed(2)} 公分</strong>。</p>`;
             } else {
                  infoText.innerHTML = '<p class="text-gray-500">請輸入數據以開始計算。</p>';
@@ -464,7 +409,7 @@
             renderDataTable();
             drawCustomChart();
             if(proposedElevations.length > 0){
-                const finalAvgThickness = proposedElevations.reduce((sum, val, i) => sum + (val - existingElevations[i]), 0) / proposedElevations.length * 100;
+                const finalAvgThickness = averageThicknessCm(existingElevations, proposedElevations);
                 infoText.innerHTML = `<p class="text-blue-600 font-semibold">手動調整中... 目前平均厚度約為: <strong>${finalAvgThickness.toFixed(2)} 公分</strong>。</p>`;
             }
         }
@@ -536,36 +481,21 @@
 
 
         // ===== 雲端：初始化、狀態序列化、存檔、分享 =====
-        function initFirebase() {
+        function initCloud() {
             try {
-                const app = initializeApp({
-                    apiKey: "AIzaSyDZuFavG2_diY8MLKw-DlPJxZEbwIIQ1hM",
-                    authDomain: "ac-tool-529aa.firebaseapp.com",
-                    projectId: "ac-tool-529aa",
-                    storageBucket: "ac-tool-529aa.firebasestorage.app",
-                    messagingSenderId: "805495795043",
-                    appId: "1:805495795043:web:1c73ccc07f39d5196c7756",
-                    measurementId: "G-W81FRXJ8Q3"
-                });
-                db = getFirestore(app);
-                auth = getAuth(app);
+                ({ db, auth } = initFirebase());
                 onAuthStateChanged(auth, user => { updateAuthUI(user); loadSlopeList(); });
             } catch(e) { console.error("Firebase 初始化失敗:", e); }
         }
 
         function updateAuthUI(user) {
-            const bar = document.getElementById('auth-bar');
-            if (!bar) return;
-            if (user) {
-                bar.innerHTML = `<span class="text-gray-600">已登入：<span class="font-semibold text-gray-800">${user.email || ''}</span></span>
-                    <button id="logoutBtn" class="secondary-button">登出</button>`;
-                document.getElementById('logoutBtn').addEventListener('click', () => signOut(auth));
-            } else {
-                bar.innerHTML = `<span class="text-gray-500">尚未登入（可瀏覽/分享，儲存與刪除需登入）</span>
-                    <button id="loginBtn" class="action-button">使用 Google 登入</button>`;
-                document.getElementById('loginBtn').addEventListener('click', () =>
-                    signInWithPopup(auth, new GoogleAuthProvider()).catch(err => alert('登入失敗：' + err.message)));
-            }
+            renderAuthBar(document.getElementById('auth-bar'), user, {
+                auth,
+                hint: '尚未登入（可瀏覽/分享，儲存與刪除需登入）',
+                loginClass: 'action-button',
+                logoutClass: 'secondary-button',
+                onLoginError: err => alert('登入失敗：' + err.message),
+            });
         }
 
         function getSlopeState() {
@@ -593,9 +523,7 @@
 
         // 本機暫存：切換工具/重新整理後保留狀態
         function saveSlopeLocal() {
-            try {
-                if (stations.length >= 2) localStorage.setItem(SLOPE_LS_KEY, JSON.stringify(getSlopeState()));
-            } catch(e) { /* 忽略容量或隱私模式錯誤 */ }
+            if (stations.length >= 2) lsSetJSON(SLOPE_LS_KEY, getSlopeState());
         }
 
         async function saveSlope() {
@@ -661,10 +589,8 @@
             const orig = shareDataBtn.textContent;
             shareDataBtn.disabled = true; shareDataBtn.textContent = '⏳ 產生連結…';
             try {
-                const ref = doc(collection(db, 'shares'));
-                await setDoc(ref, getSlopeState());
-                const url = location.origin + location.pathname + '#s=' + ref.id;
-                await navigator.clipboard.writeText(url);
+                const id = await createShare(db, getSlopeState());
+                await navigator.clipboard.writeText(shareUrl(id));
                 shareDataBtn.textContent = '✅ 已複製連結！';
             } catch(e) { console.error(e); shareDataBtn.textContent = '❌ 失敗，請重試'; }
             setTimeout(() => { shareDataBtn.textContent = orig; shareDataBtn.disabled = false; }, 2500);
@@ -672,8 +598,8 @@
 
         async function loadShareById(id) {
             try {
-                const s = await getDoc(doc(db, 'shares', id));
-                if (s.exists()) applySlopeState(s.data());
+                const state = await loadShare(db, id);
+                if (state) applySlopeState(state);
             } catch(e) { console.warn('載入分享失敗', e); }
         }
 
@@ -696,20 +622,13 @@
 
         applyAvgBtn.addEventListener('click', () => {
             if (proposedElevations.length < 3) return;
-            const tempElevations = [...proposedElevations];
-            for (let i = 1; i < tempElevations.length - 1; i++) {
-                proposedElevations[i] = (tempElevations[i-1] + tempElevations[i] + tempElevations[i+1]) / 3;
-            }
+            proposedElevations = threePointAverage(proposedElevations);
             manualUpdate();
             infoText.innerHTML = `<p class="text-blue-600 font-semibold">已套用三點平均進行平順化。</p>`;
         });
         
         copyCSVDataBtn.addEventListener('click', () => { // Renamed listener
-            let csvContent = "樁號,現有高程(m),完工高程(m),鋪設厚度(cm)\n";
-            for (let i = 0; i < stations.length; i++) {
-                const thickness = (proposedElevations[i] - existingElevations[i]) * 100;
-                csvContent += `${stations[i]},${existingElevations[i].toFixed(3)},${proposedElevations[i].toFixed(3)},${thickness.toFixed(1)}\n`;
-            }
+            const csvContent = toCSV(stations, existingElevations, proposedElevations);
             
             const textarea = document.createElement('textarea');
             textarea.value = csvContent;
@@ -824,14 +743,8 @@
         
         // 偵測來自「斷面分析工具」的縱向剖面資料（localStorage 橋接）
         function checkBridge() {
-            let raw;
-            try { raw = localStorage.getItem('actool_bridge_zongpo'); } catch(e) { return; }
-            if (!raw) return;
-            let data;
-            try { data = JSON.parse(raw); } catch(e) { localStorage.removeItem('actool_bridge_zongpo'); return; }
-            if (!data || !Array.isArray(data.stations) || !Array.isArray(data.elevations) || data.stations.length < 2) {
-                localStorage.removeItem('actool_bridge_zongpo'); return;
-            }
+            const data = readBridge();
+            if (!data) return;
             const banner = document.getElementById('bridgeBanner');
             const s0 = data.from != null ? data.from : data.stations[0];
             const s1 = data.to != null ? data.to : data.stations[data.stations.length - 1];
@@ -842,22 +755,22 @@
                 stations = data.stations.slice();
                 existingElevations = data.elevations.slice();
                 dataInput.value = formatInput(stations, existingElevations);
-                localStorage.removeItem('actool_bridge_zongpo');
+                clearBridge();
                 banner.classList.add('hidden');
                 updateApp();
             };
             document.getElementById('bridgeSkipBtn').onclick = () => {
-                localStorage.removeItem('actool_bridge_zongpo');
+                clearBridge();
                 banner.classList.add('hidden');
             };
         }
 
         window.onload = async () => {
-            initFirebase();
-            const hash = location.hash.slice(1);
-            if (hash.startsWith('s=')) {
+            initCloud();
+            const share = parseShareHash(location.hash);
+            if (share && share.kind === 'share') {
                 history.replaceState(null, '', location.pathname + location.search);
-                await loadShareById(hash.slice(2));
+                await loadShareById(share.id);
                 return;
             }
             checkBridge();
@@ -876,15 +789,9 @@
 
         // 還原本機暫存；成功回傳 true
         function restoreSlopeLocal() {
-            let raw;
-            try { raw = localStorage.getItem(SLOPE_LS_KEY); } catch(e) { return false; }
-            if (!raw) return false;
-            try {
-                const s = JSON.parse(raw);
-                if (!s || !Array.isArray(s.stations) || s.stations.length < 2) return false;
-                applySlopeState(s);
-                return true;
-            } catch(e) { return false; }
+            const s = lsGetJSON(SLOPE_LS_KEY, null);
+            if (!s || !Array.isArray(s.stations) || s.stations.length < 2) return false;
+            try { applySlopeState(s); return true; } catch(e) { return false; }
         }
 
         window.addEventListener('beforeunload', saveSlopeLocal);
