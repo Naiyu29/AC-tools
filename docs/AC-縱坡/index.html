@@ -148,9 +148,20 @@
     </div>
 
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getFirestore, collection, addDoc, query, onSnapshot, orderBy, doc, getDoc, setDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        // Firebase（雲端存檔、分享、登入）改成「需要時才載入」。
+        // 以前寫成最上面的 import：工地網路連不到 Google 時整支程式不會執行，
+        // 連不需要雲端的平順化計算也不能用。現在載不到只影響雲端功能。
+        const FB = 'https://www.gstatic.com/firebasejs/11.6.1/';
+        let initializeApp, getFirestore, collection, addDoc, query, onSnapshot, orderBy, doc, getDoc, setDoc, deleteDoc;
+        let getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged;
+        async function loadFirebase() {
+            const [a, f, au] = await Promise.all([
+                import(FB + 'firebase-app.js'), import(FB + 'firebase-firestore.js'), import(FB + 'firebase-auth.js'),
+            ]);
+            ({ initializeApp } = a);
+            ({ getFirestore, collection, addDoc, query, onSnapshot, orderBy, doc, getDoc, setDoc, deleteDoc } = f);
+            ({ getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } = au);
+        }
 
         let db, auth, slopeUnsub;
         const SLOPE_LS_KEY = 'actool_slope_v1';   // 本機暫存鍵（跨工具切換保留狀態）
@@ -413,7 +424,12 @@
             const rows = raw.split('\n')
                 .map(l => l.trim())
                 .filter(l => l !== '')
-                .map(l => l.split(/[\s,]+/).map(Number).filter(n => !isNaN(n)));
+                // 樁號可寫成 0+120、1K+020（換算成公尺）；以前這種寫法變成 NaN 被丟掉，
+                // 那一行的高程會被誤當成「只有高程」或整行消失
+                .map(l => l.split(/[\s,]+/).map(t => {
+                    const m = /^(\d+)[Kk]?\+(\d+(?:\.\d+)?)$/.exec(t);
+                    return m ? +m[1] * 1000 + +m[2] : Number(t);
+                }).filter(n => !isNaN(n)));
             const hasPairs = rows.some(r => r.length >= 2);
             let sts = [], els = [];
             if (hasPairs) {
@@ -536,7 +552,16 @@
 
 
         // ===== 雲端：初始化、狀態序列化、存檔、分享 =====
-        function initFirebase() {
+        async function initFirebase() {
+            try { await loadFirebase(); }
+            catch (e) {
+                console.warn('Firebase 載入失敗，雲端功能停用：', e);
+                const bar = document.getElementById('auth-bar');
+                if (bar) bar.textContent = '⚠️ 雲端未連線（只影響雲端存檔與分享，計算正常）';
+                const listEl = document.getElementById('slope-saved-list');
+                if (listEl) listEl.innerHTML = '<li class="text-gray-500 py-2">連不到雲端資料庫，雲端紀錄暫時不能用。</li>';
+                return;
+            }
             try {
                 const app = initializeApp({
                     apiKey: "AIzaSyDZuFavG2_diY8MLKw-DlPJxZEbwIIQ1hM",
@@ -853,10 +878,12 @@
         }
 
         window.onload = async () => {
-            initFirebase();
+            const firebaseReady = initFirebase();
             const hash = location.hash.slice(1);
             if (hash.startsWith('s=')) {
                 history.replaceState(null, '', location.pathname + location.search);
+                await firebaseReady;
+                if (!db) { alert('目前連不到雲端資料庫，分享的內容讀不到。請確認網路後重新開啟連結。'); return; }
                 await loadShareById(hash.slice(2));
                 return;
             }

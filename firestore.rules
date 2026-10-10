@@ -2,19 +2,23 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // 分析紀錄：任何人可讀、可新增/修改，只有授權者可刪除
+    // 分析紀錄：任何人可讀；新增與修改（含改名）要先登入；只有授權者可刪除
+    // 以前「修改」不用登入：任何知道網址的人都能用一行程式把別人的存檔內容蓋掉，
+    // 刪除雖然有擋，但蓋成空白跟刪掉是一樣的結果。
     match /analyses/{docId} {
-      allow read:          if true;
-      allow create, update: if true;
+      allow read:           if true;
+      allow create, update: if request.auth != null;
       allow delete: if request.auth != null &&
         (request.auth.token.email.matches('.*@j3r\\.com\\.tw') ||
          request.auth.token.email == 'v8896320@gmail.com');
     }
 
-    // 縱坡紀錄：任何人可讀、可新增/修改，只有授權者可刪除
+    // 縱坡紀錄：任何人可讀；新增與修改（含改名）要先登入；只有授權者可刪除
+    // 以前「修改」不用登入：任何知道網址的人都能用一行程式把別人的存檔內容蓋掉，
+    // 刪除雖然有擋，但蓋成空白跟刪掉是一樣的結果。
     match /slopes/{docId} {
-      allow read:          if true;
-      allow create, update: if true;
+      allow read:           if true;
+      allow create, update: if request.auth != null;
       allow delete: if request.auth != null &&
         (request.auth.token.email.matches('.*@j3r\\.com\\.tw') ||
          request.auth.token.email == 'v8896320@gmail.com');

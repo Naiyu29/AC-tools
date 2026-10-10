@@ -1152,7 +1152,8 @@
                 const coordFormat = document.querySelector('input[name="coordFormat"]:checked').value;
                 this.points = [];
                 lines.forEach(line => {
-                    const parts = line.trim().split(/\s+/);
+                    // 全站儀／RTK 匯出常是逗號分隔（CSV），以前只認空白，整份 CSV 讀進來是 0 點
+                    const parts = line.trim().replace(/\uFF0C/g, ',').split(/[\s,]+/).filter(t => t !== '');
                     if (parts.length >= 4) {
                         const id = parts[0];
                         const val1 = parseFloat(parts[1]); const val2 = parseFloat(parts[2]); const z = parseFloat(parts[3]);
@@ -1410,7 +1411,12 @@
                 } return null;
             }
 
-            formatStation(st) { return `${Math.floor(st / 1000)}K+${(st % 1000).toFixed(2).padStart(6, '0')}`; }
+            // 先四捨五入到公分再拆 K 與 +，不然 1999.999 會顯示成 1K+1000.00
+            formatStation(st) {
+                const cm = Math.round(st * 100);
+                const km = Math.floor(cm / 100000), m = (cm - km * 100000) / 100;
+                return `${km}K+${m.toFixed(2).padStart(6, '0')}`;
+            }
 
             updateStationListUI() {
                 const panel = document.getElementById('stationListPanel');

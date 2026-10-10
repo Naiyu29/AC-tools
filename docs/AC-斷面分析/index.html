@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>通用AC斷面分析工具</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js"></script><!-- 鎖定版本：不鎖的話 Chart.js 出新的大版本當天，圖表外掛可能就不相容 -->
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-annotation/1.4.0/chartjs-plugin-annotation.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
@@ -321,9 +321,21 @@
     </div>
 
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getFirestore, collection, addDoc, query, onSnapshot, orderBy, doc, getDoc, setDoc, deleteDoc, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        // Firebase（雲端存檔、登入）改成「需要時才載入」。
+        // 以前寫成最上面的 import：只要工地網路連不到 Google，整支程式一行都不會執行，
+        // 連不需要雲端的計算也不能用，而且畫面上沒有任何錯誤訊息。
+        // 現在載不到只會讓「雲端存檔」那一區顯示連線失敗，計算照常。
+        const FB = 'https://www.gstatic.com/firebasejs/11.6.1/';
+        let initializeApp, getFirestore, collection, addDoc, query, onSnapshot, orderBy, doc, getDoc, setDoc, deleteDoc, updateDoc;
+        let getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged;
+        async function loadFirebase() {
+            const [a, f, au] = await Promise.all([
+                import(FB + 'firebase-app.js'), import(FB + 'firebase-firestore.js'), import(FB + 'firebase-auth.js'),
+            ]);
+            ({ initializeApp } = a);
+            ({ getFirestore, collection, addDoc, query, onSnapshot, orderBy, doc, getDoc, setDoc, deleteDoc, updateDoc } = f);
+            ({ getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } = au);
+        }
 
         document.addEventListener('DOMContentLoaded', () => {
             // --- 全域變數 ---
@@ -392,7 +404,16 @@
             };
 
             // --- Firebase 初始化與驗證 ---
-            function initializeFirebase() {
+            async function initializeFirebase() {
+                try { await loadFirebase(); }
+                catch (e) {
+                    console.warn('Firebase 載入失敗，雲端存檔停用：', e);
+                    const list = document.getElementById('saved-list');
+                    if (list) list.innerHTML = '<li>連不到雲端資料庫（網路或防火牆），雲端存檔暫時不能用；計算、匯出、匯入不受影響。</li>';
+                    const bar = document.getElementById('auth-bar');
+                    if (bar) bar.textContent = '⚠️ 雲端未連線（只影響雲端存檔與分享，計算正常）';
+                    return;
+                }
                 const firebaseConfig = {
                     apiKey: "AIzaSyDZuFavG2_diY8MLKw-DlPJxZEbwIIQ1hM",
                     authDomain: "ac-tool-529aa.firebaseapp.com",
@@ -439,6 +460,10 @@
             }
 
             function loginWithGoogle() {
+                if (!auth) {
+                    modal.show({ title: '無法登入', message: '目前連不到雲端服務，請確認網路後重新整理頁面。', type: 'alert' });
+                    return;
+                }
                 const provider = new GoogleAuthProvider();
                 signInWithPopup(auth, provider).catch(error => {
                     console.error("登入失敗:", error);
@@ -545,6 +570,10 @@
             }
 
             async function editAnalysisName(docId, currentName) {
+                if (!auth || !auth.currentUser) {
+                    modal.show({ title: '需要登入', message: '改名需要先用頁面上方的「使用 Google 登入」登入。', type: 'alert' });
+                    return;
+                }
                 const newName = await modal.show({ title: '編輯紀錄名稱', message: '請輸入新的紀錄名稱：', type: 'prompt', defaultValue: currentName });
                 if (newName && newName.trim() !== '') {
                     const docRef = doc(db, "analyses", docId);
@@ -634,6 +663,10 @@
                 normalized.trim().split('\n').forEach((line, index) => {
                     if (line.trim() === '') return;
                     const rawTokens = line.trim().split(/\s+/);
+                    // 樁號可寫成 0+120、1K+020、1k+020.5（換算成公尺）。
+                    // 以前這種寫法會被當成標題行，整行默默丟掉。
+                    const st = /^(\d+)\s*[Kk]?\+(\d+(?:\.\d+)?)$/.exec(rawTokens[0]);
+                    if (st) rawTokens[0] = String(+st[1] * 1000 + +st[2]);
                     // 第一個 token 不是數字 → 文字標題行，靜默跳過
                     if (isNaN(rawTokens[0]) || rawTokens[0] === '') return;
                     const values = rawTokens.filter(v => v !== '' && !isNaN(v)).map(Number);
@@ -995,14 +1028,30 @@
                 container.innerHTML = `<table class="min-w-full divide-y divide-gray-200">${tableHeader}${tableBody}</table>`;
             }
             
+            // 一個斷面在 [xa, xb] 這一段的兩端高程。xa、xb 是所有斷面支距聯集裡相鄰的兩個，
+            // 所以斷面在這段之內一定是一條直線。用「段中點落在哪一段」來找那條直線，
+            // 同一支距有兩個高程（側溝、緣石的立面）時才不會拿到立面另一側的高程。
+            function segmentEnds(points, xa, xb) {
+                const xm = (xa + xb) / 2;
+                for (let i = 0; i < points.length - 1; i++) {
+                    const a = points[i], b = points[i + 1];
+                    if (a.x < b.x && a.x <= xm && xm <= b.x) {
+                        const k = (b.y - a.y) / (b.x - a.x);
+                        return [a.y + (xa - a.x) * k, a.y + (xb - a.x) * k];
+                    }
+                }
+                return null;
+            }
+
             function calculateSectionArea(p1, p2) {
                 let cut = 0, fill = 0;
                 if (!p1 || !p2 || p1.length === 0 || p2.length === 0) return { cutArea: 0, fillArea: 0 };
                 const allOffsets = [...new Set([...p1.map(p => p.x), ...p2.map(p => p.x)])].sort((a, b) => a - b);
                 for (let i = 0; i < allOffsets.length - 1; i++) {
                     const x1 = allOffsets[i], x2 = allOffsets[i+1];
-                    const y1_s = interpolate(p1, x1), y2_s = interpolate(p2, x1), y1_e = interpolate(p1, x2), y2_e = interpolate(p2, x2);
-                    if (y1_s === null || y2_s === null || y1_e === null || y2_e === null) continue;
+                    const s1 = segmentEnds(p1, x1, x2), s2 = segmentEnds(p2, x1, x2);
+                    if (!s1 || !s2) continue;
+                    const [y1_s, y1_e] = s1, [y2_s, y2_e] = s2;
                     const h1 = y1_s - y2_s, h2 = y1_e - y2_e, w = x2 - x1;
                     if (h1 * h2 >= 0) { const a = (h1 + h2) / 2 * w; if (a > 0) cut += a; else fill -= a; } 
                     else {
@@ -1019,20 +1068,31 @@
             function createLowerBoundary(p1, p2) {
                 if (!p1 || p1.length === 0) return p2 || [];
                 if (!p2 || p2.length === 0) return p1 || [];
-                const lowerBoundaryPoints = [];
+                // 逐段取兩個斷面較低的那條線。兩線在段內交叉時補上交點，
+                // 同支距的立面（側溝、緣石）會保留成兩個點，不會被拉成斜線。
+                const out = [];
+                const push = (x, y) => {
+                    const last = out[out.length - 1];
+                    if (!last || last.x !== x || Math.abs(last.y - y) > 1e-9) out.push({ x, y });
+                };
                 const allOffsets = [...new Set([...p1.map(p => p.x), ...p2.map(p => p.x)])].sort((a, b) => a - b);
-                for (const x of allOffsets) {
-                    const y1 = interpolate(p1, x);
-                    const y2 = interpolate(p2, x);
-                    if (y1 !== null && y2 !== null) {
-                        lowerBoundaryPoints.push({ x: x, y: Math.min(y1, y2) });
-                    } else if (y1 !== null) {
-                        lowerBoundaryPoints.push({ x: x, y: y1 });
-                    } else if (y2 !== null) {
-                        lowerBoundaryPoints.push({ x: x, y: y2 });
+                for (let i = 0; i < allOffsets.length - 1; i++) {
+                    const xa = allOffsets[i], xb = allOffsets[i + 1];
+                    const e1 = segmentEnds(p1, xa, xb), e2 = segmentEnds(p2, xa, xb);
+                    if (e1 && e2) {
+                        push(xa, Math.min(e1[0], e2[0]));
+                        const da = e1[0] - e2[0], db = e1[1] - e2[1];
+                        if (da * db < 0) {
+                            const t = da / (da - db);
+                            push(xa + (xb - xa) * t, e1[0] + (e1[1] - e1[0]) * t);
+                        }
+                        push(xb, Math.min(e1[1], e2[1]));
+                    } else if (e1 || e2) {
+                        const e = e1 || e2;
+                        push(xa, e[0]); push(xb, e[1]);
                     }
                 }
-                return lowerBoundaryPoints;
+                return out;
             }
 
             function calculateAndDisplayOverallSummary() {
@@ -1067,25 +1127,45 @@
                     });
                 });
 
-                for (let i = 0; i < areaDetails.length - 1; i++) {
-                    const s1 = areaDetails[i];
-                    const s2 = areaDetails[i+1];
-                    const dist = Math.abs(s1.mileage - s2.mileage);
-                    planingVolume += ((s1.planingArea + s2.planingArea) / 2) * dist;
-                    if (hasS3) {
-                        pavingVolume += ((s1.pavingArea + s2.pavingArea) / 2) * dist;
+                /* 平均斷面法只能用「需要的斷面都有測」的里程。
+                   以前是所有斷面的里程聯集一起算，某一站只要少測一組（例如舖築後
+                   每 20m 測一次、原地面每 10m），那一站的面積就被當成 0，
+                   前後兩段的量直接少一半，畫面上也沒有任何提示。
+                   刨除量要「原地面＋刨除後」；舖築量要「舖築後＋原地面或刨除後」。 */
+                const has = (map, m) => (map[m] || []).length > 1;
+                const planingRows = areaDetails.filter(d => has(dataMap1, d.mileage) && has(dataMap2, d.mileage));
+                const pavingRows  = areaDetails.filter(d => has(dataMap3, d.mileage) && (has(dataMap1, d.mileage) || has(dataMap2, d.mileage)));
+                const volumeOf = (rows, key) => {
+                    let v = 0;
+                    for (let i = 0; i < rows.length - 1; i++) {
+                        v += ((rows[i][key] + rows[i + 1][key]) / 2) * Math.abs(rows[i].mileage - rows[i + 1].mileage);
                     }
-                }
+                    return v;
+                };
+                planingVolume = volumeOf(planingRows, 'planingArea');
+                if (hasS3) pavingVolume = volumeOf(pavingRows, 'pavingArea');
+                const missing = (rows) => areaDetails.filter(d => !rows.includes(d)).map(d => d.mileage);
+                const skipPlaning = hasS1 ? missing(planingRows) : [];
+                const skipPaving  = hasS3 ? missing(pavingRows) : [];
+                areaDetails.forEach(d => {
+                    d.noPlaning = skipPlaning.includes(d.mileage);
+                    d.noPaving  = skipPaving.includes(d.mileage);
+                });
 
-                const totalAvgPlaningThickness = areaDetails.reduce((sum, d) => sum + d.avgPlaningThickness, 0) / (areaDetails.length || 1);
-                const totalAvgPavingThickness = areaDetails.reduce((sum, d) => sum + d.avgPavingThickness, 0) / (areaDetails.length || 1);
+                const mean = (rows, key) => rows.reduce((sum, d) => sum + d[key], 0) / (rows.length || 1);
+                const totalAvgPlaningThickness = mean(planingRows, 'avgPlaningThickness');
+                const totalAvgPavingThickness  = mean(pavingRows, 'avgPavingThickness');
 
                 let volumeHTML = '';
+                const skipNote = (list, what) => list.length
+                    ? `<div class="text-xs font-normal text-amber-700 mt-1">⚠️ 里程 ${list.join('、')} 缺少${what}，這幾站不列入計算，前後以相鄰有資料的里程直接連算</div>`
+                    : '';
                 if (hasS1) {
                     volumeHTML += `
                     <div>
                         <span class="font-semibold text-red-600">總刨除量:</span> ${planingVolume.toFixed(3)} m³ <br>
                         <span class="text-sm text-gray-600">推估平均刨除厚度: ${totalAvgPlaningThickness.toFixed(2)} cm</span>
+                        ${skipNote(skipPlaning, '原地面或刨除後斷面')}
                     </div>
                 `;
                 }
@@ -1094,6 +1174,7 @@
                     <div>
                         <span class="font-semibold text-green-600">總舖築量:</span> ${pavingVolume.toFixed(3)} m³ <br>
                         <span class="text-sm text-gray-600">推估平均舖築厚度: ${totalAvgPavingThickness.toFixed(2)} cm</span>
+                        ${skipNote(skipPaving, '舖築後斷面')}
                     </div>
                     `;
                 }
@@ -1109,8 +1190,8 @@
                 areaDetails.forEach(detail => {
                     table += `<tr>
                         <td class="px-4 py-4 font-semibold">${detail.mileage}</td>
-                        ${hasS1 ? `<td class="px-4 py-4 text-red-600">${detail.planingArea.toFixed(3)}</td><td class="px-4 py-4 text-red-600">${detail.avgPlaningThickness.toFixed(2)}</td>` : ''}
-                        ${hasS3 ? `<td class="px-4 py-4 text-green-600">${detail.pavingArea.toFixed(3)}</td><td class="px-4 py-4 text-green-600">${detail.avgPavingThickness.toFixed(2)}</td>` : ''}
+                        ${hasS1 ? (detail.noPlaning ? `<td class="px-4 py-4 text-gray-400" colspan="2">缺斷面，不列入</td>` : `<td class="px-4 py-4 text-red-600">${detail.planingArea.toFixed(3)}</td><td class="px-4 py-4 text-red-600">${detail.avgPlaningThickness.toFixed(2)}</td>`) : ''}
+                        ${hasS3 ? (detail.noPaving ? `<td class="px-4 py-4 text-gray-400" colspan="2">缺斷面，不列入</td>` : `<td class="px-4 py-4 text-green-600">${detail.pavingArea.toFixed(3)}</td><td class="px-4 py-4 text-green-600">${detail.avgPavingThickness.toFixed(2)}</td>`) : ''}
                     </tr>`;
                 });
                 areaContainer.innerHTML = table + '</tbody></table>';
@@ -1401,7 +1482,8 @@
             }
             
             // --- 啟動程序 ---
-            initializeFirebase();
+            // 雲端改成非同步載入；要讀雲端的地方（分享連結）先等它好
+            const firebaseReady = initializeFirebase();
             document.getElementById('processButton').addEventListener('click', processData);
             document.getElementById('saveButton').addEventListener('click', saveAnalysis);
             document.getElementById('exportButton').addEventListener('click', exportData);
@@ -1503,7 +1585,11 @@
                 if (!hash.startsWith('s=')) return;
                 const shareId = hash.slice(2);
                 history.replaceState(null, '', location.pathname + location.search);
-                if (!shareId || !db) return;
+                await firebaseReady;
+                if (!shareId || !db) {
+                    if (shareId) modal.show({ title: '無法開啟分享', message: '目前連不到雲端資料庫，分享的內容讀不到。請確認網路後重新開啟連結。', type: 'alert' });
+                    return;
+                }
                 try {
                     const snap = await getDoc(doc(db, 'shares', shareId));
                     if (snap.exists()) applyFormState(snap.data());
@@ -1519,6 +1605,7 @@
                     toast.classList.add('show');
                     setTimeout(() => toast.classList.remove('show'), 2500);
                 };
+                if (!db) { showToast('❌ 連不到雲端，無法產生分享連結'); return; }
                 btn.textContent = '⏳';
                 btn.disabled = true;
                 try {
